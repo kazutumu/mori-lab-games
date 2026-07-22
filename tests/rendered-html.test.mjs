@@ -31,4 +31,8 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(source, /研究員を座らせろ/);
   assert.match(source, /ミナ世界クイズ/);
   assert.match(source, /localStorage\.setItem/);
+  assert.match(source, /treePoints/);
+  assert.match(source, /pixel-tree/);
+  assert.match(source, /seat-effect/);
+  assert.match(source, /questionCount/);
 });

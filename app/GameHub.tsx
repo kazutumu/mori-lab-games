@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz";
 
@@ -10,6 +10,10 @@ type SaveData = {
   shelves: number;
   lamps: number;
   chairs: number;
+  treePoints: number;
+  exploreLevel: number;
+  chairLevel: number;
+  quizLevel: number;
 };
 
 const initialSave: SaveData = {
@@ -18,23 +22,22 @@ const initialSave: SaveData = {
   shelves: 0,
   lamps: 0,
   chairs: 0,
+  treePoints: 0,
+  exploreLevel: 1,
+  chairLevel: 1,
+  quizLevel: 1,
 };
 
 const games = [
-  { id: "explore", icon: "🍃", title: "ミナと気配の森", description: "小道を歩いて、見えない気配を5つ集める探索ゲーム。", tag: "探索" },
-  { id: "novel", icon: "📖", title: "昼の星への道", description: "選んだ言葉で景色と結末が変わる短編ノベル。", tag: "物語" },
-  { id: "idle", icon: "🌲", title: "森研究所を育てよう", description: "気づきを集め、本棚と灯りと椅子を増やす放置ゲーム。", tag: "育成" },
-  { id: "chotto", icon: "🔴", title: "ちょっとだけボタン", description: "押すたび仕事が増殖。保存しながら安全に帰れるか。", tag: "管理" },
-  { id: "chair", icon: "🦄", title: "研究員を座らせろ！", description: "急発進する研究員を見つけ、椅子へ戻すミニゲーム。", tag: "保護" },
-  { id: "quiz", icon: "⭐", title: "ミナ世界クイズ", description: "公開済み作品だけから出題する、静かな記憶のクイズ。", tag: "クイズ" },
+  { id: "explore", icon: "🍃", title: "ミナと気配の森", description: "草や気配を集めて次の森へ。クリアするたび地図が広がります。", tag: "探索 · 3 LEVELS" },
+  { id: "chair", icon: "🦄", title: "研究員を座らせろ！", description: "急発進する研究員を捕まえて着席。レベルごとに速くなります。", tag: "保護 · 5 LEVELS" },
+  { id: "quiz", icon: "⭐", title: "ミナ世界クイズ", description: "公開済み作品だけから出題。レベルが上がると問題数も増えます。", tag: "クイズ · 3 LEVELS" },
+  { id: "idle", icon: "🌲", title: "森研究所を育てよう", description: "本棚2・灯り2・椅子1をそろえて、小さな研究所を動かします。", tag: "育成 · GOAL MODE" },
 ] as const;
 
-const kehai = [
-  { cell: 3, name: "草の先のひかり", icon: "✦" },
-  { cell: 8, name: "遠くの音", icon: "♪" },
-  { cell: 11, name: "小さな足あと", icon: "·" },
-  { cell: 19, name: "葉のゆれ", icon: "⌁" },
-  { cell: 24, name: "昼の星", icon: "☆" },
+const restingGames = [
+  { icon: "📖", title: "昼の星への道", note: "物語の枝を見直すため休眠中" },
+  { icon: "🔴", title: "ちょっとだけボタン", note: "遊び方を研究し直すため休眠中" },
 ];
 
 const novelNodes: Record<string, { text: string; choices?: { label: string; next: string }[]; ending?: string }> = {
@@ -86,6 +89,21 @@ const quizQuestions = [
   { q: "森研究所の標語は？", options: ["夜の森を歩く場所", "昼の星を探す場所", "風の名前を決める場所"], answer: 1 },
 ];
 
+const treeStages = [
+  { min: 0, name: "森の種" },
+  { min: 2, name: "小さな芽" },
+  { min: 5, name: "若い木" },
+  { min: 9, name: "枝の木" },
+  { min: 14, name: "大きな木" },
+  { min: 20, name: "森研究所の木" },
+];
+
+const forestItemNames = ["風待ち草", "星の葉", "足音の実", "朝露の芽", "名前のない花"];
+
+function treeStage(points: number) {
+  return treeStages.reduce((stage, candidate, index) => points >= candidate.min ? index : stage, 0);
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -112,8 +130,18 @@ export default function GameHub() {
     if (ready) localStorage.setItem("mori-lab-games-v1", JSON.stringify(save));
   }, [save, ready]);
 
-  const markClear = useCallback((id: string) => {
-    setSave((current) => current.clears.includes(id) ? current : { ...current, clears: [...current.clears, id] });
+  const reward = useCallback((id: string, points: number, update?: Partial<SaveData>) => {
+    setSave((current) => {
+      const firstClear = !current.clears.includes(id);
+      const hasUpdate = Boolean(update && Object.entries(update).some(([key, value]) => current[key as keyof SaveData] !== value));
+      if (!firstClear && !hasUpdate) return current;
+      return {
+        ...current,
+        ...update,
+        clears: firstClear ? [...current.clears, id] : current.clears,
+        treePoints: firstClear ? current.treePoints + points : current.treePoints,
+      };
+    });
   }, []);
 
   const openGame = (id: Mode) => {
@@ -132,16 +160,16 @@ export default function GameHub() {
           <span className="brand-mark">🌲</span>
           <span><strong>森研究所ゲーム集</strong><small>昼の星を探す場所</small></span>
         </button>
-        <div className="save-status"><span>自動保存</span><strong>{save.clears.length}<i>/6</i></strong></div>
+        <div className="save-status"><span>木の成長</span><strong>Lv.{treeStage(save.treePoints) + 1}</strong></div>
       </header>
 
       {mode === "home" && <Home save={save} openGame={openGame} />}
-      {mode === "explore" && <ExploreGame onBack={() => openGame("home")} onClear={() => markClear("explore")} />}
-      {mode === "novel" && <NovelGame onBack={() => openGame("home")} onClear={() => markClear("novel")} />}
-      {mode === "idle" && <IdleGame save={save} setSave={setSave} onBack={() => openGame("home")} onClear={() => markClear("idle")} />}
-      {mode === "chotto" && <ChottoGame onBack={() => openGame("home")} onClear={() => markClear("chotto")} />}
-      {mode === "chair" && <ChairGame onBack={() => openGame("home")} onClear={() => markClear("chair")} />}
-      {mode === "quiz" && <QuizGame onBack={() => openGame("home")} onClear={() => markClear("quiz")} />}
+      {mode === "explore" && <ExploreGame save={save} onBack={() => openGame("home")} onClear={(level) => reward(`explore-${level}`, level, { exploreLevel: Math.min(3, Math.max(save.exploreLevel, level + 1)) })} />}
+      {mode === "novel" && <NovelGame onBack={() => openGame("home")} onClear={() => reward("novel", 1)} />}
+      {mode === "idle" && <IdleGame save={save} setSave={setSave} onBack={() => openGame("home")} onClear={() => reward("idle-goal", 3)} />}
+      {mode === "chotto" && <ChottoGame onBack={() => openGame("home")} onClear={() => reward("chotto", 1)} />}
+      {mode === "chair" && <ChairGame save={save} onBack={() => openGame("home")} onClear={(level) => reward(`chair-${level}`, 2 + level, { chairLevel: Math.min(5, Math.max(save.chairLevel, level + 1)) })} />}
+      {mode === "quiz" && <QuizGame save={save} onBack={() => openGame("home")} onClear={(level) => reward(`quiz-${level}`, level, { quizLevel: Math.min(3, Math.max(save.quizLevel, level + 1)) })} />}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>
@@ -149,26 +177,27 @@ export default function GameHub() {
 }
 
 function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void }) {
+  const stage = treeStage(save.treePoints);
+  const next = treeStages[stage + 1];
   return (
     <section className="home-view">
       <div className="hero">
-        <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 01</div>
-        <h1>森で見つけたものは、<br /><em>小さなゲーム</em>になりました。</h1>
-        <p>ミナと歩く。研究所を育てる。研究員を座らせる。六つの入口から、今日の気配を選んでください。</p>
-        <div className="hero-meta"><span>6つのゲーム</span><span>端末内セーブ</span><span>Mac / iPhone</span></div>
+        <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 02</div>
+        <h1>遊んだぶんだけ、<br /><em>一本の木</em>が育ちます。</h1>
+        <p>ミナと森を歩く。研究員を椅子へ戻す。公開済み作品を思い出す。小さなクリアが、いつか森研究所になります。</p>
+        <div className="hero-meta"><span>4つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
       </div>
 
-      <div className="forest-scene" aria-hidden="true">
-        <div className="sun">☆</div>
-        <div className="tree t1" /><div className="tree t2" /><div className="tree t3" />
-        <div className="mina-figure"><span>●</span><i /></div>
-        <div className="path" />
+      <div className="growth-scene">
+        <div className="growth-copy"><small>YOUR MORI TREE</small><strong>{treeStages[stage].name}</strong><span>成長ポイント {save.treePoints}{next ? ` / ${next.min}` : " · 最大成長"}</span></div>
+        <div className={`pixel-tree stage-${stage}`} aria-label={`${treeStages[stage].name}のドット絵`}><i className="tree-crown crown-a" /><i className="tree-crown crown-b" /><i className="tree-crown crown-c" /><b /><span className="tree-star">✦</span></div>
+        <div className="growth-ground" aria-hidden="true"><i /><i /><i /><i /><i /></div>
       </div>
 
       <div className="section-heading"><span>GAME ENTRANCES</span><h2>今日は、どの枝へ？</h2></div>
       <div className="game-grid">
         {games.map((game, index) => {
-          const cleared = save.clears.includes(game.id);
+          const cleared = save.clears.some((id) => id === game.id || id.startsWith(`${game.id}-`) || (game.id === "idle" && id === "idle-goal"));
           return (
             <button className="game-card" key={game.id} onClick={() => openGame(game.id)}>
               <span className="card-number">0{index + 1}</span>
@@ -179,7 +208,8 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
           );
         })}
       </div>
-      <aside className="notice"><strong>研究員へ</strong><p>全部遊んでも構いません。ただし「ちょっとだけ」の自己申告はセーブデータに採用されません。</p><span>🦄 椅子、あります。</span></aside>
+      <div className="resting-section"><span>研究温室 · 休眠中</span>{restingGames.map((game) => <div key={game.title}><b>{game.icon}</b><strong>{game.title}</strong><small>{game.note}</small></div>)}</div>
+      <aside className="notice"><strong>研究員へ</strong><p>クリアすると木が育ちます。ただし木を一晩で森にしようとする行為は、保護担当の観察対象です。</p><span>🦄 椅子、あります。</span></aside>
     </section>
   );
 }
@@ -194,23 +224,33 @@ function GameFrame({ title, kicker, onBack, children }: { title: string; kicker:
   );
 }
 
-function ExploreGame({ onBack, onClear }: { onBack: () => void; onClear: () => void }) {
-  const [position, setPosition] = useState(12);
+function ExploreGame({ save, onBack, onClear }: { save: SaveData; onBack: () => void; onClear: (level: number) => void }) {
+  const [level, setLevel] = useState(save.exploreLevel);
+  const size = 4 + level;
+  const startCell = Math.floor(size / 2) * size + Math.floor(size / 2);
+  const itemCount = 2 + level;
+  const itemCells = useMemo(() => {
+    const cells = Array.from({ length: itemCount }, (_, index) => (3 + index * (size + 2) + level * 2) % (size * size)).filter((cell) => cell !== startCell);
+    while (cells.length < itemCount) cells.push((cells.length * 3 + 1) % (size * size));
+    return cells;
+  }, [itemCount, level, size, startCell]);
+  const [position, setPosition] = useState(startCell);
   const [found, setFound] = useState<number[]>([]);
-  const [message, setMessage] = useState("風の向きを見て、歩いてみましょう。");
+  const [message, setMessage] = useState(`第${level}の森。草の気配を${itemCount}つ探しましょう。`);
+  const complete = found.length === itemCells.length;
 
   const move = useCallback((dx: number, dy: number) => {
     setPosition((current) => {
-      const x = current % 5;
-      const y = Math.floor(current / 5);
-      const next = clamp(x + dx, 0, 4) + clamp(y + dy, 0, 4) * 5;
-      const item = kehai.find((entry) => entry.cell === next);
-      if (item) {
+      const x = current % size;
+      const y = Math.floor(current / size);
+      const next = clamp(x + dx, 0, size - 1) + clamp(y + dy, 0, size - 1) * size;
+      const itemIndex = itemCells.indexOf(next);
+      if (itemIndex >= 0) {
         setFound((items) => {
           if (items.includes(next)) return items;
           const updated = [...items, next];
-          setMessage(`「${item.name}」を見つけました。`);
-          if (updated.length === kehai.length) onClear();
+          setMessage(`「${forestItemNames[itemIndex]}」を見つけました。`);
+          if (updated.length === itemCells.length) onClear(level);
           return updated;
         });
       } else if (next !== current) {
@@ -218,7 +258,7 @@ function ExploreGame({ onBack, onClear }: { onBack: () => void; onClear: () => v
       }
       return next;
     });
-  }, [onClear]);
+  }, [itemCells, level, onClear, size]);
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -229,22 +269,31 @@ function ExploreGame({ onBack, onClear }: { onBack: () => void; onClear: () => v
     return () => window.removeEventListener("keydown", key);
   }, [move]);
 
-  const reset = () => { setPosition(12); setFound([]); setMessage("森の入口へ戻りました。"); };
+  const reset = (nextLevel = level) => {
+    const nextSize = 4 + nextLevel;
+    setLevel(nextLevel);
+    setPosition(Math.floor(nextSize / 2) * nextSize + Math.floor(nextSize / 2));
+    setFound([]);
+    setMessage(`第${nextLevel}の森へ入りました。地図が少し広がっています。`);
+  };
 
   return <GameFrame title="ミナと気配の森" kicker="01 · EXPLORATION" onBack={onBack}>
     <div className="game-panel explore-layout">
-      <div className="map" aria-label="5マス四方の森の地図">
-        {Array.from({ length: 25 }, (_, cell) => {
-          const item = kehai.find((entry) => entry.cell === cell);
-          return <div className={`map-cell ${position === cell ? "current" : ""} ${found.includes(cell) ? "found" : ""}`} key={cell}>
-            {found.includes(cell) && item ? <span>{item.icon}</span> : <i />}
-            {position === cell && <b aria-label="ミナ">ミ</b>}
+      <div className="map pixel-map" style={{ "--grid-size": size } as React.CSSProperties} aria-label={`${size}マス四方の森の地図`}>
+        {Array.from({ length: size * size }, (_, cell) => {
+          const itemIndex = itemCells.indexOf(cell);
+          const terrain = ["grass", "forest", "path", "flower"][(cell * 7 + Math.floor(cell / size) + level) % 4];
+          return <div className={`map-cell terrain-${terrain} ${position === cell ? "current" : ""} ${found.includes(cell) ? "found" : ""}`} key={cell}>
+            {found.includes(cell) && itemIndex >= 0 && <span className={`pixel-item item-${itemIndex % 3}`} aria-label={forestItemNames[itemIndex]} />}
+            {position === cell && <b className="pixel-mina" aria-label="ミナ"><i /><span /></b>}
           </div>;
         })}
       </div>
       <div className="explore-side">
-        <div className="counter"><small>集めた気配</small><strong>{found.length}<i> / {kehai.length}</i></strong></div>
+        <div className="level-badge">FOREST LEVEL {level} · {size}×{size}</div>
+        <div className="counter"><small>集めた草と気配</small><strong>{found.length}<i> / {itemCells.length}</i></strong></div>
         <p className="message-box">{message}</p>
+        <div className="collection-strip">{itemCells.map((cell, index) => <span className={found.includes(cell) ? "collected" : ""} key={cell}><i className={`pixel-item item-${index % 3}`} />{found.includes(cell) ? forestItemNames[index] : "？？？"}</span>)}</div>
         <div className="dpad" aria-label="移動ボタン">
           <button onClick={() => move(0, -1)} aria-label="上へ">↑</button>
           <button onClick={() => move(-1, 0)} aria-label="左へ">←</button>
@@ -252,10 +301,10 @@ function ExploreGame({ onBack, onClear }: { onBack: () => void; onClear: () => v
           <button onClick={() => move(1, 0)} aria-label="右へ">→</button>
           <button onClick={() => move(0, 1)} aria-label="下へ">↓</button>
         </div>
-        <button className="text-button" onClick={reset}>最初から歩く</button>
+        <button className="text-button" onClick={() => reset()}>この森を最初から歩く</button>
       </div>
     </div>
-    {found.length === kehai.length && <ResultCard icon="☆" title="昼の星を見つけました" text="見えなくても、気配は森の中に残っています。" />}
+    {complete && <div className="level-clear"><ResultCard icon="☆" title={`第${level}の森を歩ききりました`} text={`木へ成長ポイントが${level}つ届きました。`} />{level < 3 && <button onClick={() => reset(level + 1)}>次の森へ進む →</button>}</div>}
   </GameFrame>;
 }
 
@@ -297,8 +346,9 @@ function IdleGame({ save, setSave, onBack, onClear }: { save: SaveData; setSave:
         <div className="lab-stats"><span>研究所レベル <strong>{level}</strong></span><span>自動観察 <strong>+{rate}</strong> / 2秒</span></div>
       </div>
       <div className="resource-panel">
+        <div className="idle-goal"><small>TODAY&apos;S GOAL</small><strong>研究所を動かそう</strong><p>本棚 <b className={save.shelves >= 2 ? "done" : ""}>{save.shelves}/2</b> · 灯り <b className={save.lamps >= 2 ? "done" : ""}>{save.lamps}/2</b> · 椅子 <b className={save.chairs >= 1 ? "done" : ""}>{save.chairs}/1</b></p></div>
         <div className="insight-count"><small>集めた気づき</small><strong>{save.insights}</strong><span>✦</span></div>
-        <button className="primary-action" onClick={observe}>気づきを観察する <span>+1</span></button>
+        <button className="primary-action pixel-action" onClick={observe}><i className="pixel-eye" />気づきを観察する <span>+1</span></button>
         <div className="build-list">
           <BuildButton icon="📚" title="本棚" level={save.shelves} cost={10 + save.shelves * 8} resource={save.insights} onBuild={() => build("shelves", 10 + save.shelves * 8)} />
           <BuildButton icon="💡" title="昼の灯り" level={save.lamps} cost={20 + save.lamps * 12} resource={save.insights} onBuild={() => build("lamps", 20 + save.lamps * 12)} />
@@ -369,59 +419,70 @@ function ChottoGame({ onBack, onClear }: { onBack: () => void; onClear: () => vo
   </GameFrame>;
 }
 
-function ChairGame({ onBack, onClear }: { onBack: () => void; onClear: () => void }) {
+function ChairGame({ save, onBack, onClear }: { save: SaveData; onBack: () => void; onClear: (level: number) => void }) {
+  const [level, setLevel] = useState(save.chairLevel);
   const [running, setRunning] = useState(false);
-  const [time, setTime] = useState(15);
+  const [time, setTime] = useState(16);
   const [seated, setSeated] = useState(0);
   const [pos, setPos] = useState({ x: 54, y: 44 });
-  const won = seated >= 5;
+  const [hit, setHit] = useState<{ x: number; y: number; id: number } | null>(null);
+  const target = 4 + level;
+  const won = seated >= target;
   useEffect(() => {
     if (!running || won) return;
-    const mover = window.setInterval(() => setPos({ x: 8 + Math.random() * 76, y: 12 + Math.random() * 66 }), 750);
+    const mover = window.setInterval(() => setPos({ x: 9 + Math.random() * 75, y: 14 + Math.random() * 62 }), Math.max(310, 850 - level * 95));
     const clock = window.setInterval(() => setTime((value) => value <= 1 ? (setRunning(false), 0) : value - 1), 1000);
     return () => { window.clearInterval(mover); window.clearInterval(clock); };
-  }, [running, won]);
-  const start = () => { setSeated(0); setTime(15); setPos({ x: 50, y: 45 }); setRunning(true); };
+  }, [level, running, won]);
+  const start = (nextLevel = level) => { setLevel(nextLevel); setSeated(0); setTime(Math.max(11, 17 - nextLevel)); setPos({ x: 50, y: 45 }); setHit(null); setRunning(true); };
   const catchResearcher = () => {
     if (!running) return;
     const next = seated + 1;
+    setHit({ ...pos, id: Date.now() });
     setSeated(next);
     setTime((value) => value + 2);
     setPos({ x: 8 + Math.random() * 76, y: 12 + Math.random() * 66 });
-    if (next >= 5) { setRunning(false); onClear(); }
+    window.setTimeout(() => setHit(null), 420);
+    if (next >= target) { setRunning(false); onClear(level); }
   };
   return <GameFrame title="研究員を座らせろ！" kicker="05 · PROTECTION" onBack={onBack}>
     <div className="chair-game">
-      <div className="chair-hud"><span>着席 <strong>{seated}/5</strong></span><span>残り <strong>{time}秒</strong></span></div>
-      <div className="room-field">
-        <div className="desk">作業台</div><div className="safe-chair">🪑</div><div className="protector">🦄<small>保護担当</small></div>
-        {running && <button className="runner" style={{ left: `${pos.x}%`, top: `${pos.y}%` }} onClick={catchResearcher} aria-label="走る研究員を座らせる"><span>研</span><i>まだいける！</i></button>}
-        {!running && !won && <div className="start-overlay"><strong>{time === 0 ? "研究員は森の奥へ行きましたw" : "研究員が急発進します"}</strong><p>動き回る「研」を5回押して、椅子へ戻してください。</p><button onClick={start}>{time === 0 ? "もう一度保護する" : "保護開始"}</button></div>}
-        {won && <div className="start-overlay win"><strong>着席完了！</strong><p>研究員、本日の大きい作業は終了です。</p><button onClick={start}>もう一度遊ぶ</button></div>}
+      <div className="chair-hud"><span>PROTECTION LEVEL <strong>{level}</strong></span><span>着席 <strong>{seated}/{target}</strong></span><span>残り <strong>{time}秒</strong></span></div>
+      <div className={`room-field pixel-room ${hit ? "seat-flash" : ""}`}>
+        <div className="pixel-desk"><i /><span>作業台</span></div><div className="safe-chair pixel-chair" aria-label="椅子"><i /><b /></div><div className="protector pixel-protector" aria-label="保護担当"><i /><b /><span>保護担当</span></div>
+        {running && <button className="runner pixel-runner" style={{ left: `${pos.x}%`, top: `${pos.y}%` }} onClick={catchResearcher} aria-label="走る研究員を座らせる"><i className="runner-head" /><i className="runner-body" /><span>まだいける！</span></button>}
+        {hit && <div key={hit.id} className="seat-effect" style={{ left: `${hit.x}%`, top: `${hit.y}%` }}>着席！<i>+1</i></div>}
+        {!running && !won && <div className="start-overlay"><strong>{time === 0 ? "研究員は森の奥へ行きましたw" : `レベル${level}：研究員が急発進します`}</strong><p>動き回るドット研究員を{target}回押して、右下の椅子へ戻してください。</p><button onClick={() => start()}>{time === 0 ? "もう一度保護する" : "保護開始"}</button></div>}
+        {won && <div className="start-overlay win"><div className="pixel-seated"><i /><b /></div><strong>着席完了！</strong><p>成長ポイント +{2 + level}。研究員、本日の大きい作業は終了です。</p>{level < 5 ? <button onClick={() => start(level + 1)}>次の急発進へ →</button> : <button onClick={() => start(1)}>レベル1から遊ぶ</button>}</div>}
       </div>
     </div>
   </GameFrame>;
 }
 
-function QuizGame({ onBack, onClear }: { onBack: () => void; onClear: () => void }) {
+function QuizGame({ save, onBack, onClear }: { save: SaveData; onBack: () => void; onClear: (level: number) => void }) {
+  const [level, setLevel] = useState(save.quizLevel);
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
-  const finished = index >= quizQuestions.length;
-  const question = quizQuestions[index];
-  useEffect(() => { if (finished) onClear(); }, [finished, onClear]);
+  const questionCount = [3, 5, 8][level - 1];
+  const questions = quizQuestions.slice(0, questionCount);
+  const finished = index >= questions.length;
+  const question = questions[index];
+  useEffect(() => { if (finished) onClear(level); }, [finished, level, onClear]);
   const answer = (choice: number) => { if (selected !== null) return; setSelected(choice); if (choice === question.answer) setScore((value) => value + 1); };
   const next = () => { setIndex((value) => value + 1); setSelected(null); };
   const reset = () => { setIndex(0); setScore(0); setSelected(null); };
+  const nextLevel = () => { setLevel((value) => Math.min(3, value + 1)); setIndex(0); setScore(0); setSelected(null); };
   return <GameFrame title="ミナ世界クイズ" kicker="06 · PUBLIC ARCHIVE QUIZ" onBack={onBack}>
     <div className="quiz-panel">
       {!finished ? <>
-        <div className="quiz-progress"><span style={{ width: `${(index / quizQuestions.length) * 100}%` }} /></div>
-        <div className="quiz-count">QUESTION <strong>{String(index + 1).padStart(2, "0")}</strong> / {String(quizQuestions.length).padStart(2, "0")}</div>
+        <div className="quiz-level"><span>LEVEL {level}</span><small>{level === 1 ? "森の入口" : level === 2 ? "枝の記憶" : "森の記録係"}</small></div>
+        <div className="quiz-progress"><span style={{ width: `${(index / questions.length) * 100}%` }} /></div>
+        <div className="quiz-count">QUESTION <strong>{String(index + 1).padStart(2, "0")}</strong> / {String(questions.length).padStart(2, "0")}</div>
         <h2>{question.q}</h2>
         <div className="quiz-options">{question.options.map((option, i) => <button key={option} className={selected === null ? "" : i === question.answer ? "correct" : i === selected ? "wrong" : "dim"} onClick={() => answer(i)}><span>{String.fromCharCode(65 + i)}</span>{option}</button>)}</div>
         {selected !== null && <div className="quiz-feedback"><strong>{selected === question.answer ? "正解です ✦" : "惜しい。気配は別の枝でした。"}</strong><button onClick={next}>次の問題へ →</button></div>}
-      </> : <div className="quiz-result"><span>☆</span><small>観察結果</small><strong>{score}<i> / {quizQuestions.length}</i></strong><h2>{score === quizQuestions.length ? "森の記録係" : score >= 5 ? "気配をよく見つけました" : "もう一度、森を歩いてみましょう"}</h2><button onClick={reset}>もう一度挑戦</button></div>}
+      </> : <div className="quiz-result"><span>☆</span><small>LEVEL {level} · 観察結果</small><strong>{score}<i> / {questions.length}</i></strong><h2>{score === questions.length ? "すべての気配を見つけました" : score >= Math.ceil(questions.length * .6) ? "気配をよく見つけました" : "もう一度、森を歩いてみましょう"}</h2>{level < 3 ? <button onClick={nextLevel}>次のレベルへ →</button> : <button onClick={reset}>レベル3にもう一度挑戦</button>}</div>}
       <p className="public-note">このクイズは公開済みの作品と森研究所の公開情報だけを使用しています。</p>
     </div>
   </GameFrame>;

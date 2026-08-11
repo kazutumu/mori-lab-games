@@ -45,6 +45,45 @@ function assertInteractable(visited, x, y, label) {
   );
 }
 
+test("native-detail render profile keeps the authored pixel art legible", () => {
+  assert.deepEqual(game.MINA_PIXEL_RENDER_PROFILE, {
+    width: 1024,
+    height: 576,
+    tile: 64,
+    actorWidth: 72,
+    actorHeight: 96,
+    mode: "native-detail",
+  });
+  assert.equal(game.MINA_PIXEL_RENDER_PROFILE.width / game.MINA_PIXEL_RENDER_PROFILE.tile, 16);
+  assert.equal(game.MINA_PIXEL_RENDER_PROFILE.height / game.MINA_PIXEL_RENDER_PROFILE.tile, 9);
+});
+
+test("battle art stays above the two-row command panel on M1 iPad layouts", () => {
+  const layout = game.MINA_PIXEL_BATTLE_LAYOUT;
+  const commandPanelHeight = 104;
+  const commandPanelBottom = 10;
+  for (const displayWidth of [760, 720]) {
+    const scale = displayWidth / game.MINA_PIXEL_RENDER_PROFILE.width;
+    const displayHeight = game.MINA_PIXEL_RENDER_PROFILE.height * scale;
+    const commandTop = displayHeight - commandPanelBottom - commandPanelHeight;
+    const normalHudBottom = (
+      layout.normalEnemy.y
+      + layout.normalEnemy.staggerY
+      + layout.normalEnemy.size
+      + 10
+      + layout.hpPanelHeight
+    ) * scale;
+    const bossHudBottom = (
+      layout.boss.y
+      + layout.boss.size
+      + 10
+      + layout.hpPanelHeight
+    ) * scale;
+    assert.ok(normalHudBottom < commandTop, `normal enemy HUD must clear commands at ${displayWidth}px`);
+    assert.ok(bossHudBottom < commandTop, `boss HUD must clear commands at ${displayWidth}px`);
+  }
+});
+
 test("all six maps and chapter-critical routes are traversable", () => {
   const maps = game.createMinaPixelWorldMaps();
   assert.deepEqual(Object.keys(maps), ["village", "apothecary", "workshop", "forest", "laboratory", "depths"]);

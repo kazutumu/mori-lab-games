@@ -130,9 +130,26 @@ type Movement = {
 };
 
 const SAVE_KEY = "mori-lab-jrpg-ch1-v1";
-const LOGICAL_WIDTH = 640;
-const LOGICAL_HEIGHT = 360;
-const TILE = 32;
+export const MINA_PIXEL_RENDER_PROFILE = {
+  width: 1024,
+  height: 576,
+  tile: 64,
+  actorWidth: 72,
+  actorHeight: 96,
+  mode: "native-detail",
+} as const;
+export const MINA_PIXEL_BATTLE_LAYOUT = {
+  mina: { x: 80, y: 270, width: 96, height: 128 },
+  normalEnemy: { startX: 520, gapX: 170, y: 160, staggerY: 24, size: 128 },
+  boss: { x: 650, y: 160, size: 192 },
+  hpPanelHeight: 42,
+  messagePanel: { x: 16, y: 16, width: 992, height: 72 },
+} as const;
+const LOGICAL_WIDTH = MINA_PIXEL_RENDER_PROFILE.width;
+const LOGICAL_HEIGHT = MINA_PIXEL_RENDER_PROFILE.height;
+const TILE = MINA_PIXEL_RENDER_PROFILE.tile;
+const ACTOR_WIDTH = MINA_PIXEL_RENDER_PROFILE.actorWidth;
+const ACTOR_HEIGHT = MINA_PIXEL_RENDER_PROFILE.actorHeight;
 const MOVE_TIME = 142;
 const MAP_IDS: MapId[] = ["village", "apothecary", "workshop", "forest", "laboratory", "depths"];
 const DIRECTIONS: Direction[] = ["up", "down", "left", "right"];
@@ -352,13 +369,13 @@ export function createMinaPixelWorldMaps(): Record<MapId, PixelMapDefinition> {
   const village: PixelMapDefinition = {
     id: "village", name: "灯枝村", width: 30, height: 22, tiles: villageTiles, encounters: false,
     props: [
-      { id: "ito-house", asset: "propCottage", x: 6, y: 7, width: 128, height: 107, block: { left: 2, right: 2, top: 3, bottom: 0 } },
-      { id: "roku-house", asset: "propCottage", x: 23, y: 7, width: 128, height: 107, block: { left: 2, right: 2, top: 3, bottom: 0 } },
-      { id: "village-lab", asset: "propLaboratory", x: 15, y: 5, width: 160, height: 133, block: { left: 2, right: 2, top: 3, bottom: 0 } },
-      { id: "village-tree-a", asset: "propBroadleaf", x: 4, y: 15, width: 80, height: 100, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      { id: "village-tree-b", asset: "propEvergreen", x: 26, y: 17, width: 80, height: 100, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      { id: "village-sign", asset: "propSignpost", x: 18, y: 17, width: 36, height: 48, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      { id: "village-lantern", asset: "propLantern", x: 12, y: 12, width: 36, height: 48, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "ito-house", asset: "propCottage", x: 6, y: 7, width: 192, height: 160, block: { left: 2, right: 2, top: 3, bottom: 0 } },
+      { id: "roku-house", asset: "propCottage", x: 23, y: 7, width: 192, height: 160, block: { left: 2, right: 2, top: 3, bottom: 0 } },
+      { id: "village-lab", asset: "propLaboratory", x: 15, y: 5, width: 192, height: 160, block: { left: 2, right: 2, top: 3, bottom: 0 } },
+      { id: "village-tree-a", asset: "propBroadleaf", x: 4, y: 15, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "village-tree-b", asset: "propEvergreen", x: 26, y: 17, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "village-sign", asset: "propSignpost", x: 18, y: 17, width: 72, height: 96, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "village-lantern", asset: "propLantern", x: 12, y: 12, width: 72, height: 96, block: { left: 0, right: 0, top: 0, bottom: 0 } },
     ],
     npcs: [
       { id: "ito", name: "イト研究員", asset: "npcKeeper", x: 16, y: 11 },
@@ -380,13 +397,13 @@ export function createMinaPixelWorldMaps(): Record<MapId, PixelMapDefinition> {
     return {
       id, name, width: 16, height: 12, tiles, encounters: false,
       props: id === "apothecary" ? [
-        { id: "apothecary-bed", asset: "propBed", x: 3, y: 5, width: 48, height: 64, block: { left: 0, right: 0, top: 1, bottom: 0 } },
-        { id: "apothecary-shelf", asset: "propBookshelf", x: 13, y: 4, width: 64, height: 64, block: { left: 1, right: 0, top: 1, bottom: 0 } },
-        { id: "apothecary-desk", asset: "propResearchDesk", x: 8, y: 5, width: 80, height: 56, block: { left: 1, right: 1, top: 0, bottom: 0 } },
+        { id: "apothecary-bed", asset: "propBed", x: 3, y: 5, width: 96, height: 128, block: { left: 0, right: 0, top: 1, bottom: 0 } },
+        { id: "apothecary-shelf", asset: "propBookshelf", x: 13, y: 4, width: 128, height: 128, block: { left: 1, right: 0, top: 1, bottom: 0 } },
+        { id: "apothecary-desk", asset: "propResearchDesk", x: 8, y: 5, width: 160, height: 112, block: { left: 1, right: 1, top: 0, bottom: 0 } },
       ] : [
-        { id: "workshop-shelf", asset: "propBookshelf", x: 3, y: 4, width: 64, height: 64, block: { left: 1, right: 0, top: 1, bottom: 0 } },
-        { id: "workshop-desk", asset: "propResearchDesk", x: 10, y: 5, width: 80, height: 56, block: { left: 1, right: 1, top: 0, bottom: 0 } },
-        { id: "workshop-bed", asset: "propBed", x: 13, y: 8, width: 48, height: 64, block: { left: 0, right: 0, top: 1, bottom: 0 } },
+        { id: "workshop-shelf", asset: "propBookshelf", x: 3, y: 4, width: 128, height: 128, block: { left: 1, right: 0, top: 1, bottom: 0 } },
+        { id: "workshop-desk", asset: "propResearchDesk", x: 10, y: 5, width: 160, height: 112, block: { left: 1, right: 1, top: 0, bottom: 0 } },
+        { id: "workshop-bed", asset: "propBed", x: 13, y: 8, width: 96, height: 128, block: { left: 0, right: 0, top: 1, bottom: 0 } },
       ],
       npcs: [npc],
       portals: [{ x: 8, y: 10, to: "village", toX: id === "apothecary" ? 6 : 23, toY: 9 }],
@@ -409,14 +426,14 @@ export function createMinaPixelWorldMaps(): Record<MapId, PixelMapDefinition> {
   forestTiles[9][33] = "standingStone";
   for (let x = 3; x < 38; x += 5) forestTiles[24 - (x % 3)][x] = "bush";
   const forestProps: PropDefinition[] = [
-    { id: "forest-bridge", asset: "propBridge", x: 14, y: 13, width: 72, height: 48 },
-    { id: "forest-tree-a", asset: "propEvergreen", x: 5, y: 5, width: 80, height: 100, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-    { id: "forest-tree-b", asset: "propBroadleaf", x: 29, y: 12, width: 80, height: 100, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-    { id: "forest-tree-c", asset: "propEvergreen", x: 35, y: 23, width: 80, height: 100, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-    { id: "forest-tree-d", asset: "propBroadleaf", x: 9, y: 25, width: 80, height: 100, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-    ...CHESTS.filter((chest) => chest.map === "forest").map((chest) => ({ id: chest.id, asset: "propChest" as const, x: chest.x, y: chest.y, width: 48, height: 40, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
-    ...BEACONS.map((beacon) => ({ id: beacon.id, asset: "propSaveMonument" as const, x: beacon.x, y: beacon.y, width: 54, height: 42, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
-    ...ACORNS.map((acorn) => ({ id: acorn.id, asset: "propLantern" as const, x: acorn.x, y: acorn.y, width: 24, height: 32 })),
+    { id: "forest-bridge", asset: "propBridge", x: 14, y: 13, width: 144, height: 96 },
+    { id: "forest-tree-a", asset: "propEvergreen", x: 5, y: 5, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+    { id: "forest-tree-b", asset: "propBroadleaf", x: 29, y: 12, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+    { id: "forest-tree-c", asset: "propEvergreen", x: 35, y: 23, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+    { id: "forest-tree-d", asset: "propBroadleaf", x: 9, y: 25, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+    ...CHESTS.filter((chest) => chest.map === "forest").map((chest) => ({ id: chest.id, asset: "propChest" as const, x: chest.x, y: chest.y, width: 96, height: 80, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
+    ...BEACONS.map((beacon) => ({ id: beacon.id, asset: "propSaveMonument" as const, x: beacon.x, y: beacon.y, width: 144, height: 112, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
+    ...ACORNS.map((acorn) => ({ id: acorn.id, asset: "propLantern" as const, x: acorn.x, y: acorn.y, width: 54, height: 72 })),
   ];
   const forest: PixelMapDefinition = {
     id: "forest", name: "星苔林道", width: 40, height: 30, tiles: forestTiles, props: forestProps, encounters: true,
@@ -435,14 +452,14 @@ export function createMinaPixelWorldMaps(): Record<MapId, PixelMapDefinition> {
   const laboratory: PixelMapDefinition = {
     id: "laboratory", name: "森研究所・方位観測室", width: 24, height: 18, tiles: labTiles, encounters: false,
     props: [
-      { id: "lab-desk", asset: "propResearchDesk", x: 12, y: 12, width: 80, height: 56, block: { left: 1, right: 1, top: 0, bottom: 0 } },
-      { id: "lab-shelf-a", asset: "propBookshelf", x: 3, y: 5, width: 64, height: 64, block: { left: 1, right: 0, top: 1, bottom: 0 } },
-      { id: "lab-shelf-b", asset: "propBookshelf", x: 21, y: 5, width: 64, height: 64, block: { left: 1, right: 0, top: 1, bottom: 0 } },
-      { id: "lab-save", asset: "propSaveMonument", x: 3, y: 14, width: 54, height: 42, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      { id: "lab-lantern-a", asset: "propLantern", x: 8, y: 13, width: 30, height: 40, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      { id: "lab-lantern-b", asset: "propLantern", x: 16, y: 13, width: 30, height: 40, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      ...PEDESTALS.map((pedestal) => ({ id: pedestal.id, asset: "propSaveMonument" as const, x: pedestal.x, y: pedestal.y, width: 54, height: 42, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
-      ...CHESTS.filter((chest) => chest.map === "laboratory").map((chest) => ({ id: chest.id, asset: "propChest" as const, x: chest.x, y: chest.y, width: 48, height: 40, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
+      { id: "lab-desk", asset: "propResearchDesk", x: 12, y: 12, width: 160, height: 112, block: { left: 1, right: 1, top: 0, bottom: 0 } },
+      { id: "lab-shelf-a", asset: "propBookshelf", x: 3, y: 5, width: 128, height: 128, block: { left: 1, right: 0, top: 1, bottom: 0 } },
+      { id: "lab-shelf-b", asset: "propBookshelf", x: 21, y: 5, width: 128, height: 128, block: { left: 1, right: 0, top: 1, bottom: 0 } },
+      { id: "lab-save", asset: "propSaveMonument", x: 3, y: 14, width: 144, height: 112, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "lab-lantern-a", asset: "propLantern", x: 8, y: 13, width: 72, height: 96, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "lab-lantern-b", asset: "propLantern", x: 16, y: 13, width: 72, height: 96, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      ...PEDESTALS.map((pedestal) => ({ id: pedestal.id, asset: "propSaveMonument" as const, x: pedestal.x, y: pedestal.y, width: 144, height: 112, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
+      ...CHESTS.filter((chest) => chest.map === "laboratory").map((chest) => ({ id: chest.id, asset: "propChest" as const, x: chest.x, y: chest.y, width: 96, height: 80, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
     ],
     npcs: [
       { id: "rin", name: "リン観測員", asset: "npcFuka", x: 8, y: 10 },
@@ -462,10 +479,10 @@ export function createMinaPixelWorldMaps(): Record<MapId, PixelMapDefinition> {
   const depths: PixelMapDefinition = {
     id: "depths", name: "森研究所・地下方位観測層", width: 30, height: 20, tiles: depthsTiles, encounters: false,
     props: [
-      { id: "depth-lantern-a", asset: "propLantern", x: 11, y: 13, width: 30, height: 40, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      { id: "depth-lantern-b", asset: "propLantern", x: 19, y: 13, width: 30, height: 40, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      { id: "depth-save", asset: "propSaveMonument", x: 22, y: 16, width: 54, height: 42, block: { left: 0, right: 0, top: 0, bottom: 0 } },
-      ...CHESTS.filter((chest) => chest.map === "depths").map((chest) => ({ id: chest.id, asset: "propChest" as const, x: chest.x, y: chest.y, width: 48, height: 40, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
+      { id: "depth-lantern-a", asset: "propLantern", x: 11, y: 13, width: 72, height: 96, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "depth-lantern-b", asset: "propLantern", x: 19, y: 13, width: 72, height: 96, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      { id: "depth-save", asset: "propSaveMonument", x: 22, y: 16, width: 144, height: 112, block: { left: 0, right: 0, top: 0, bottom: 0 } },
+      ...CHESTS.filter((chest) => chest.map === "depths").map((chest) => ({ id: chest.id, asset: "propChest" as const, x: chest.x, y: chest.y, width: 96, height: 80, block: { left: 0, right: 0, top: 0, bottom: 0 } })),
     ],
     npcs: [],
     portals: [{ x: 15, y: 18, to: "laboratory", toX: 12, toY: 2 }],
@@ -1146,6 +1163,11 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
         : clamp(position.y * TILE + TILE / 2 - LOGICAL_HEIGHT / 2, 0, map.height * TILE - LOGICAL_HEIGHT),
     });
 
+    const visibleRect = (left: number, top: number, width: number, height: number) => (
+      left + width >= -TILE && left <= LOGICAL_WIDTH + TILE
+      && top + height >= -TILE && top <= LOGICAL_HEIGHT + TILE
+    );
+
     const drawField = (now: number) => {
       const save = saveRef.current;
       const map = WORLD_MAPS[save.map];
@@ -1168,28 +1190,38 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       map.props.forEach((prop) => {
         if (save.chests.includes(prop.id) && prop.asset === "propChest") return;
         if (save.collected.includes(prop.id) && prop.id.startsWith("acorn")) return;
+        const left = prop.x * TILE + TILE / 2 - prop.width / 2 - camera.x;
+        const top = (prop.y + 1) * TILE - prop.height - camera.y;
+        if (!visibleRect(left, top, prop.width, prop.height)) return;
         entries.push({
-          y: prop.y,
-          draw: () => drawImage(prop.asset, prop.x * TILE + TILE / 2 - prop.width / 2 - camera.x, (prop.y + 1) * TILE - prop.height - camera.y, prop.width, prop.height),
+          y: (prop.y + 1) * TILE,
+          draw: () => drawImage(prop.asset, left, top, prop.width, prop.height),
         });
       });
-      map.npcs.forEach((npc) => entries.push({
-        y: npc.y,
-        draw: () => drawImage(npc.asset, npc.x * TILE - 12 - camera.x, (npc.y + 1) * TILE - 48 - camera.y, 36, 48),
-      }));
+      map.npcs.forEach((npc) => {
+        const left = npc.x * TILE + (TILE - ACTOR_WIDTH) / 2 - camera.x;
+        const top = (npc.y + 1) * TILE - ACTOR_HEIGHT - camera.y;
+        if (!visibleRect(left, top, ACTOR_WIDTH, ACTOR_HEIGHT)) return;
+        entries.push({
+          y: (npc.y + 1) * TILE,
+          draw: () => drawImage(npc.asset, left, top, ACTOR_WIDTH, ACTOR_HEIGHT),
+        });
+      });
+      const minaLeft = position.x * TILE + (TILE - ACTOR_WIDTH) / 2 - camera.x;
+      const minaTop = (position.y + 1) * TILE - ACTOR_HEIGHT - camera.y - position.bob;
       entries.push({
-        y: position.y + .25,
-        draw: () => drawImage(MINA_ASSET[save.direction], position.x * TILE - 10 - camera.x, (position.y + 1) * TILE - 48 - camera.y - position.bob, 36, 48),
+        y: (position.y + 1) * TILE + 1,
+        draw: () => drawImage(MINA_ASSET[save.direction], minaLeft, minaTop, ACTOR_WIDTH, ACTOR_HEIGHT),
       });
       entries.sort((a, b) => a.y - b.y).forEach((entry) => entry.draw());
 
       context.fillStyle = "rgba(4, 21, 18, .88)";
-      context.fillRect(8, 8, 236, 31);
+      context.fillRect(12, 12, 344, 46);
       context.strokeStyle = "#d9b75a";
-      context.strokeRect(8.5, 8.5, 235, 30);
+      context.strokeRect(12.5, 12.5, 343, 45);
       context.fillStyle = "#f2e6bd";
-      context.font = "bold 13px ui-monospace, monospace";
-      context.fillText(map.name, 18, 28);
+      context.font = "bold 19px ui-monospace, monospace";
+      context.fillText(map.name, 28, 42);
       if (save.map === "depths" && !save.bossDefeated) {
         const pulse = .55 + Math.sin(now / 240) * .2;
         context.fillStyle = `rgba(43, 19, 49, ${pulse})`;
@@ -1205,40 +1237,52 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       }
       context.fillStyle = boss ? "rgba(20, 8, 28, .55)" : "rgba(7, 27, 20, .42)";
       context.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-      drawImage("minaRight", 45, 178 + Math.sin(now / 220) * 2, 72, 96);
+      const battleLayout = MINA_PIXEL_BATTLE_LAYOUT;
+      drawImage(
+        "minaRight",
+        battleLayout.mina.x,
+        battleLayout.mina.y + Math.sin(now / 220) * 3,
+        battleLayout.mina.width,
+        battleLayout.mina.height,
+      );
       const alive = battleState.enemies.filter((enemy) => enemy.hp > 0);
       alive.forEach((enemy, index) => {
-        const width = enemy.kind === "boss" ? 150 : 94;
-        const height = enemy.kind === "boss" ? 150 : 94;
-        const x = enemy.kind === "boss" ? 390 : 270 + index * 115;
-        const y = enemy.kind === "boss" ? 80 : 130 + (index % 2) * 18;
+        const width = enemy.kind === "boss" ? battleLayout.boss.size : battleLayout.normalEnemy.size;
+        const height = width;
+        const x = enemy.kind === "boss" ? battleLayout.boss.x : battleLayout.normalEnemy.startX + index * battleLayout.normalEnemy.gapX;
+        const y = enemy.kind === "boss" ? battleLayout.boss.y : battleLayout.normalEnemy.y + (index % 2) * battleLayout.normalEnemy.staggerY;
         if (battleState.bossCharging && enemy.kind === "boss") {
           context.fillStyle = `rgba(242, 190, 72, ${.2 + Math.sin(now / 100) * .12})`;
           context.beginPath();
-          context.arc(x + width / 2, y + height / 2, 90, 0, Math.PI * 2);
+          context.arc(x + width / 2, y + height / 2, 118, 0, Math.PI * 2);
           context.fill();
         }
         drawImage(enemy.asset, x, y, width, height);
         context.fillStyle = "rgba(3, 15, 13, .86)";
-        context.fillRect(x - 5, y + height + 6, width + 10, 28);
+        context.fillRect(x - 8, y + height + 10, width + 16, battleLayout.hpPanelHeight);
         context.fillStyle = "#f2e6bd";
-        context.font = "bold 11px ui-monospace, monospace";
-        context.fillText(enemy.name, x, y + height + 18);
+        context.font = "bold 16px ui-monospace, monospace";
+        context.fillText(enemy.name, x, y + height + 29);
         context.fillStyle = "#2f3e36";
-        context.fillRect(x, y + height + 22, width, 4);
+        context.fillRect(x, y + height + 35, width, 7);
         context.fillStyle = "#d85d50";
-        context.fillRect(x, y + height + 22, width * enemy.hp / enemy.maxHp, 4);
+        context.fillRect(x, y + height + 35, width * enemy.hp / enemy.maxHp, 7);
       });
       context.fillStyle = "rgba(4, 21, 18, .9)";
-      context.fillRect(10, 10, 620, 54);
+      context.fillRect(battleLayout.messagePanel.x, battleLayout.messagePanel.y, battleLayout.messagePanel.width, battleLayout.messagePanel.height);
       context.strokeStyle = "#d9b75a";
-      context.strokeRect(10.5, 10.5, 619, 53);
+      context.strokeRect(
+        battleLayout.messagePanel.x + .5,
+        battleLayout.messagePanel.y + .5,
+        battleLayout.messagePanel.width - 1,
+        battleLayout.messagePanel.height - 1,
+      );
       context.fillStyle = "#f2e6bd";
-      context.font = "13px ui-monospace, monospace";
-      const message = battleState.message.length > 44 ? `${battleState.message.slice(0, 44)}…` : battleState.message;
-      context.fillText(message, 22, 34);
+      context.font = "18px ui-monospace, monospace";
+      const message = battleState.message.length > 68 ? `${battleState.message.slice(0, 68)}…` : battleState.message;
+      context.fillText(message, 34, 46);
       context.fillStyle = "#9fcab4";
-      context.fillText(`TURN ${battleState.turn}  ${battleState.phase === "player" ? "ミナの行動" : battleState.phase === "enemy" ? "敵の行動" : "戦闘終了"}`, 22, 52);
+      context.fillText(`TURN ${battleState.turn}  ${battleState.phase === "player" ? "ミナの行動" : battleState.phase === "enemy" ? "敵の行動" : "戦闘終了"}`, 34, 72);
     };
 
     const attemptPortal = () => {

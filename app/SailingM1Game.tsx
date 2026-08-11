@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { Sky } from "three/addons/objects/Sky.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -19,6 +18,39 @@ const COURSE = [
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const mat = (color: number, roughness = .62, metalness = .04) => new THREE.MeshPhysicalMaterial({ color, roughness, metalness, clearcoat: .2, clearcoatRoughness: .35 });
 const shadow = <T extends THREE.Mesh>(mesh: T) => { mesh.castShadow = true; mesh.receiveShadow = true; return mesh; };
+
+function createClearSky(sunDirection: THREE.Vector3) {
+  const material = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: { uSun: { value: sunDirection.clone().normalize() } },
+    vertexShader: `
+      varying vec3 vDirection;
+      void main() {
+        vDirection = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uSun;
+      varying vec3 vDirection;
+      void main() {
+        vec3 direction = normalize(vDirection);
+        float height = clamp(direction.y, 0.0, 1.0);
+        vec3 horizon = vec3(0.34, 0.70, 0.84);
+        vec3 zenith = vec3(0.055, 0.34, 0.66);
+        vec3 color = mix(horizon, zenith, pow(height, 0.58));
+        float sunDot = max(dot(direction, uSun), 0.0);
+        float glow = smoothstep(0.965, 0.999, sunDot);
+        float disc = smoothstep(0.9992, 0.99975, sunDot);
+        color += glow * vec3(0.20, 0.15, 0.055);
+        color = mix(color, vec3(1.0, 0.78, 0.32), disc * 0.82);
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `,
+  });
+  return new THREE.Mesh(new THREE.SphereGeometry(360, 48, 28), material);
+}
 
 function createOcean() {
   const geometry = new THREE.PlaneGeometry(100, 260, 170, 300);
@@ -302,15 +334,12 @@ export default function SailingM1Game({onClear}:Props){
     catch{errorRef.current=true;const timer=window.setTimeout(()=>{setError("この高品質版はM1以降のiPad向けです。通常の3D版はそのまま遊べます。");setLoading(false);},0);return()=>window.clearTimeout(timer);}
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2.25));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.98;
     renderer.domElement.setAttribute("aria-label","M1向け高品質な海をミナの船で進む3Dゲーム画面");host.appendChild(renderer.domElement);
-    const scene=new THREE.Scene();
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x4faacc);
     const camera=new THREE.PerspectiveCamera(55,1,.1,420);camera.position.set(8,7.5,18);
-    const sky=new Sky();sky.scale.setScalar(380);scene.add(sky);
-    const skyUniforms=(sky.material as THREE.ShaderMaterial).uniforms;
-    skyUniforms.turbidity.value=3.2;skyUniforms.rayleigh.value=1.65;skyUniforms.mieCoefficient.value=.002;skyUniforms.mieDirectionalG.value=.76;
-    const sunVector=new THREE.Vector3().setFromSphericalCoords(1,THREE.MathUtils.degToRad(58),THREE.MathUtils.degToRad(208));
-    skyUniforms.sunPosition.value.copy(sunVector);
+    const sunVector=new THREE.Vector3().setFromSphericalCoords(1,THREE.MathUtils.degToRad(42),THREE.MathUtils.degToRad(208));
+    scene.add(createClearSky(sunVector));
     scene.add(new THREE.HemisphereLight(0xdff7ff,0x173d3b,1.9));
     const sun=new THREE.DirectionalLight(0xffe1a0,4.4);sun.position.copy(sunVector).multiplyScalar(90);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-32;sun.shadow.camera.right=32;sun.shadow.camera.top=32;sun.shadow.camera.bottom=-32;sun.shadow.camera.far=190;sun.shadow.bias=-.00025;scene.add(sun);
     const {ocean,material:oceanMaterial}=createOcean();scene.add(ocean);

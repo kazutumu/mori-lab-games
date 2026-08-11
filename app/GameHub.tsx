@@ -7,8 +7,9 @@ const SailingM1Game = lazy(() => import("./SailingM1Game"));
 const Brawler2DGame = lazy(() => import("./Brawler2DGame"));
 const MinaRPGGame = lazy(() => import("./MinaRPGGame"));
 const MinaPixelRPGGame = lazy(() => import("./MinaPixelRPGGame"));
+const MinaDioramaRPGGame = lazy(() => import("./MinaDioramaRPGGame"));
 
-type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d" | "sailingm1" | "brawler2d" | "rpg3d" | "rpg2d";
+type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d" | "sailingm1" | "brawler2d" | "rpg3d" | "rpg2d" | "diorama3d";
 
 type SaveData = {
   clears: string[];
@@ -46,6 +47,7 @@ const games = [
   { id: "brawler2d", icon: "🥊", title: "ミナと夜の研究路", description: "表紙基準のミナと四人の番人が登場する、完全横スクロールのリアル2Dアクションです。", tag: "ILLUSTRATED 2D · SIDE-SCROLL" },
   { id: "rpg3d", icon: "🗝️", title: "ミナと森研究所 第一章・消えた記録", description: "村と森を歩き、記録片を集め、森研究所の扉をひらくM1 iPad基準の小規模3D RPGです。", tag: "M1 3D RPG · CHAPTER 01" },
   { id: "rpg2d", icon: "🧭", title: "ミナと星苔の方位盤 第一章・北をなくした森", description: "灯枝村から星苔林道、森研究所地下へ。方角を取り戻す完全オリジナル見下ろし型2D JRPGです。", tag: "M1 PIXEL JRPG · CHAPTER 01" },
+  { id: "diorama3d", icon: "🌀", title: "ミナと風綴りの丘 第一章・眠る風車", description: "風綴り村、風鈴丘、森研究所の分室を巡り、眠る風車へ風を取り戻す完全オリジナル3DジオラマRPGです。", tag: "M1 3D DIORAMA RPG · CHAPTER 01" },
 ] as const;
 
 const restingGames = [
@@ -190,6 +192,7 @@ export default function GameHub() {
       {mode === "brawler2d" && <GameFrame title="ミナと夜の研究路" kicker="09 · MISSION 02 · ILLUSTRATED 2D SIDE-SCROLL" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">夜の研究路を準備しています…</div>}><Brawler2DGame onClear={() => reward("brawler2d", 8)} /></Suspense></GameFrame>}
       {mode === "rpg3d" && <GameFrame title="ミナと森研究所 第一章・消えた記録" kicker="10 · M1 3D RPG · CHAPTER 01" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">村と森研究所を準備しています…</div>}><MinaRPGGame onClear={() => reward("rpg3d", 12)} /></Suspense></GameFrame>}
       {mode === "rpg2d" && <GameFrame title="ミナと星苔の方位盤 第一章・北をなくした森" kicker="11 · M1 PIXEL JRPG · CHAPTER 01" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">灯枝村と星苔林道を準備しています…</div>}><MinaPixelRPGGame onClear={() => reward("rpg2d", 14)} /></Suspense></GameFrame>}
+      {mode === "diorama3d" && <GameFrame title="ミナと風綴りの丘 第一章・眠る風車" kicker="12 · M1 3D DIORAMA RPG · CHAPTER 01" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">風綴り村と眠る風車を準備しています…</div>}><MinaDioramaRPGGame onClear={() => reward("diorama3d", 16)} /></Suspense></GameFrame>}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>
@@ -205,7 +208,7 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
         <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 02</div>
         <h1>遊んだぶんだけ、<br /><em>一本の木</em>が育ちます。</h1>
         <p>ミナと森を歩く。船で島のそばを航海する。小さなクリアが、いつか森研究所になります。</p>
-        <div className="hero-meta"><span>11の育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
+        <div className="hero-meta"><span>12の育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
       </div>
 
       <div className="growth-scene">

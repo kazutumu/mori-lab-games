@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -27,6 +27,7 @@ test("renders the Mori Lab game collection", async () => {
   const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");
   const sailingm1 = await readFile(new URL("../app/SailingM1Game.tsx", import.meta.url), "utf8");
   const brawler3d = await readFile(new URL("../app/Brawler3DGame.tsx", import.meta.url), "utf8");
+  const minaModel = await stat(new URL("../public/models/mina/mina-game-model-v1.glb", import.meta.url));
   assert.match(source, /ミナと気配の森/);
   assert.match(source, /昼の星への道/);
   assert.match(source, /森研究所を育てよう/);
@@ -90,6 +91,10 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(brawler3d, /NIGHT SHADOWS/);
   assert.match(brawler3d, /setPointerCapture/);
   assert.match(brawler3d, /ACESFilmicToneMapping/);
+  assert.match(brawler3d, /new GLTFLoader/);
+  assert.match(brawler3d, /mina-game-model-v1\.glb/);
+  assert.match(brawler3d, /表紙基準のミナ専用3Dモデル/);
+  assert.ok(minaModel.size > 500_000 && minaModel.size < 5_000_000);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

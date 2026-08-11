@@ -175,6 +175,19 @@ function createHeroIsland() {
   return island;
 }
 
+function createShallowGuide() {
+  const guide=new THREE.Group();guide.position.set(-1,0,-118);
+  const shallowMaterial=new THREE.MeshBasicMaterial({color:0xd8bd72,transparent:true,opacity:.26,depthWrite:false,side:THREE.DoubleSide});
+  const shallow=new THREE.Mesh(new THREE.CircleGeometry(1,96),shallowMaterial);shallow.rotation.x=-Math.PI/2;shallow.scale.set(16.2,10.6,1);shallow.position.y=.16;guide.add(shallow);
+  const ringMaterial=new THREE.MeshBasicMaterial({color:0xf2d27b,transparent:true,opacity:.82,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.965,1.025,96),ringMaterial);ring.rotation.x=-Math.PI/2;ring.scale.set(16.2,10.6,1);ring.position.y=.27;guide.add(ring);
+  for(let i=0;i<18;i+=1){const angle=i/18*Math.PI*2,localX=Math.cos(angle)*16.2,localZ=Math.sin(angle)*10.6;if(localX>4&&localZ>3.5)continue;const buoy=new THREE.Mesh(new THREE.CylinderGeometry(.12,.18,.72,10),mat(i%2?0xf0e4b2:0xe76a43,.55));buoy.position.set(localX,.65,localZ);guide.add(buoy);}
+  const channelMaterial=new THREE.MeshBasicMaterial({color:0x67dfcf,transparent:true,opacity:.38,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
+  const channel=new THREE.Mesh(new THREE.PlaneGeometry(5.8,13),channelMaterial);channel.rotation.x=-Math.PI/2;channel.position.set(7.8,.3,7.1);guide.add(channel);
+  [-2.55,2.55].forEach(x=>{for(let z=2;z<=12;z+=2){const marker=new THREE.Mesh(new THREE.CylinderGeometry(.08,.12,.48,8),mat(0x72e0d0,.42));marker.position.set(7.8+x,.55,z);guide.add(marker);}});
+  return {guide,ringMaterial};
+}
+
 function createWindFragment(index: number, x: number, z: number) {
   const fragment = new THREE.Group();
   fragment.position.set(x,1.8,z);
@@ -304,6 +317,7 @@ export default function SailingM1Game({onClear}:Props){
   const [stability,setStability]=useState(100);
   const [finalTime,setFinalTime]=useState(0);
   const [rating,setRating]=useState("");
+  const [shoreWarning,setShoreWarning]=useState("");
   const [message,setMessage]=useState("朝の手紙を島へ届けます。帆を開き、三つの風のかけらを集めましょう。");
   const [finished,setFinished]=useState(false);
   const [complete,setComplete]=useState(false);
@@ -320,7 +334,7 @@ export default function SailingM1Game({onClear}:Props){
   },[]);
   const reset=useCallback(()=>{
     steering.current=0;sailingRef.current=false;finishedRef.current=false;rewarded.current=false;trimRef.current=0;stabilityRef.current=100;
-    setSailing(false);setPassed(0);setSpeed(0);setTrim(0);setWind(0);setStability(100);setFinalTime(0);setRating("");setFinished(false);setComplete(false);setMessage("朝の手紙を積み直しました。三つの風のかけらを集めて島へ向かいます。");resetScene.current();
+    setSailing(false);setPassed(0);setSpeed(0);setTrim(0);setWind(0);setStability(100);setFinalTime(0);setRating("");setShoreWarning("");setFinished(false);setComplete(false);setMessage("朝の手紙を積み直しました。三つの風のかけらを集めて島へ向かいます。");resetScene.current();
   },[]);
 
   useEffect(()=>{
@@ -340,6 +354,7 @@ export default function SailingM1Game({onClear}:Props){
     const sun=new THREE.DirectionalLight(0xffe1a0,4.4);sun.position.copy(sunVector).multiplyScalar(90);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-32;sun.shadow.camera.right=32;sun.shadow.camera.top=32;sun.shadow.camera.bottom=-32;sun.shadow.camera.far=190;sun.shadow.bias=-.00025;scene.add(sun);
     const {ocean,material:oceanMaterial}=createOcean();scene.add(ocean);
     const island=createHeroIsland();scene.add(island);
+    const {guide:shallowGuide,ringMaterial:shallowRingMaterial}=createShallowGuide();scene.add(shallowGuide);
     const fragments=FRAGMENTS.map((item,i)=>{const fragment=createWindFragment(i,item.x,item.z);scene.add(fragment);return fragment;});
     const rockMeshes=ROCKS.map((item,i)=>{const rock=shadow(new THREE.Mesh(new THREE.DodecahedronGeometry(1.25+(i%2)*.35,1),mat(i%2?0x6c6559:0x81776a,.96)));rock.position.set(item.x,.35,item.z);rock.rotation.set(i*.31,i*.47,.1);scene.add(rock);return rock;});
     const {boat,sail,mina,wakeMaterial}=createM1Boat();boat.position.set(0,0,12);scene.add(boat);
@@ -348,8 +363,8 @@ export default function SailingM1Game({onClear}:Props){
     const hands=[mina.getObjectByName("m1-hand-left"),mina.getObjectByName("m1-hand-right")] as THREE.Object3D[];
     const armRest=arms.map(o=>({p:o.position.clone(),r:o.rotation.clone()}));const handRest=hands.map(o=>o.position.clone());
     const composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));const bloom=new UnrealBloomPass(new THREE.Vector2(1,1),.12,.25,.9);composer.addPass(bloom);composer.addPass(new OutputPass());
-    const collected=new Set<number>();const hitRocks=new Set<number>();let currentSpeed=0;let heading=0;let islandHitCooldown=0;let elapsed=0;let missionTime=0;let missionStarted=false;let raf=0;let celebrating=false;let lastSpeed=-1;let lastWind=999;let lastStability=100;
-    resetScene.current=()=>{boat.position.set(0,0,12);boat.rotation.set(0,0,0);camera.position.set(8,7.5,18);collected.clear();hitRocks.clear();fragments.forEach(fragment=>{fragment.visible=true;fragment.scale.setScalar(1);});currentSpeed=0;heading=0;islandHitCooldown=0;missionTime=0;missionStarted=false;celebrating=false;mina.position.y=.1;arms.forEach((o,i)=>{o.position.copy(armRest[i].p);o.rotation.copy(armRest[i].r);});hands.forEach((o,i)=>o.position.copy(handRest[i]));};
+    const collected=new Set<number>();const hitRocks=new Set<number>();let currentSpeed=0;let heading=0;let islandHitCooldown=0;let elapsed=0;let missionTime=0;let missionStarted=false;let raf=0;let celebrating=false;let lastSpeed=-1;let lastWind=999;let lastStability=100;let lastShoreWarning="";
+    resetScene.current=()=>{boat.position.set(0,0,12);boat.rotation.set(0,0,0);camera.position.set(8,7.5,18);collected.clear();hitRocks.clear();fragments.forEach(fragment=>{fragment.visible=true;fragment.scale.setScalar(1);});currentSpeed=0;heading=0;islandHitCooldown=0;missionTime=0;missionStarted=false;celebrating=false;lastShoreWarning="";shallowRingMaterial.color.setHex(0xf2d27b);shallowRingMaterial.opacity=.82;mina.position.y=.1;arms.forEach((o,i)=>{o.position.copy(armRest[i].p);o.rotation.copy(armRest[i].r);});hands.forEach((o,i)=>o.position.copy(handRest[i]));};
     const resize=()=>{const width=Math.max(1,host.clientWidth),height=Math.max(1,host.clientHeight);renderer.setSize(width,height,false);composer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix();};
     const observer=new ResizeObserver(resize);observer.observe(host);resize();
     const down=(event:KeyboardEvent)=>{if(event.key==="ArrowLeft"){event.preventDefault();steering.current=-1;}if(event.key==="ArrowRight"){event.preventDefault();steering.current=1;}if(event.key===" "){event.preventDefault();toggleSail();}if(event.key.toLowerCase()==="c")cycleCamera();};
@@ -360,7 +375,7 @@ export default function SailingM1Game({onClear}:Props){
       if(sailingRef.current&&!missionStarted)missionStarted=true;if(missionStarted&&!finishedRef.current)missionTime+=delta;
       let nextStability=stabilityRef.current;if(sailingRef.current){nextStability+=windDifference<24?delta*2.2:windDifference>48?-delta*4.5:0;}else{nextStability+=delta*5;}nextStability=clamp(nextStability,8,100);stabilityRef.current=nextStability;const stabilityInt=Math.round(nextStability);if(stabilityInt!==lastStability){lastStability=stabilityInt;setStability(stabilityInt);}if(nextStability<=10&&sailingRef.current){sailingRef.current=false;setSailing(false);setMessage("帆が不安定です。帆を休め、風向きへ合わせ直してください。");}
       const targetSpeed=sailingRef.current&&!finishedRef.current?(4.2+7.2*windEfficiency):0;currentSpeed+=(targetSpeed-currentSpeed)*Math.min(1,delta*1.25);
-      const rudderAuthority=finishedRef.current?0:(sailingRef.current?clamp(.3+currentSpeed/16,.3,.92):.22);heading+=steering.current*delta*.78*rudderAuthority;const forwardX=Math.sin(heading),forwardZ=-Math.cos(heading);const nextX=clamp(boat.position.x+forwardX*currentSpeed*delta,-24,24);const nextZ=boat.position.z+forwardZ*currentSpeed*delta;const islandX=(nextX-island.position.x)/16.2,islandZ=(nextZ-island.position.z)/10.6;const inDockChannel=Math.abs(nextX-DOCK.x)<3.3&&nextZ>island.position.z+3.2;const islandCollision=(islandX*islandX+islandZ*islandZ)<1&&!inDockChannel;islandHitCooldown=Math.max(0,islandHitCooldown-delta);if(!islandCollision){boat.position.x=nextX;boat.position.z=nextZ;}else{currentSpeed*=.58;if(islandHitCooldown<=0){islandHitCooldown=1.4;stabilityRef.current=clamp(stabilityRef.current-9,8,100);setStability(Math.round(stabilityRef.current));setMessage("島の浅瀬に船首が触れました。舵を切って海側へ旋回してください。");}}
+      const rudderAuthority=finishedRef.current?0:(sailingRef.current?clamp(.3+currentSpeed/16,.3,.92):.22);heading+=steering.current*delta*.78*rudderAuthority;const forwardX=Math.sin(heading),forwardZ=-Math.cos(heading);const nextX=clamp(boat.position.x+forwardX*currentSpeed*delta,-24,24);const nextZ=boat.position.z+forwardZ*currentSpeed*delta;const islandX=(nextX-island.position.x)/16.2,islandZ=(nextZ-island.position.z)/10.6;const islandLevel=Math.sqrt(islandX*islandX+islandZ*islandZ);const inDockChannel=Math.abs(nextX-DOCK.x)<3.3&&nextZ>island.position.z+3.2;const islandCollision=islandLevel<1&&!inDockChannel;const nearDockChannel=inDockChannel&&islandLevel<1.35;const nextShoreWarning=islandCollision?"浅瀬に接触":nearDockChannel?"桟橋進入路":islandLevel<1.25?"浅瀬接近":"";if(nextShoreWarning!==lastShoreWarning){lastShoreWarning=nextShoreWarning;setShoreWarning(nextShoreWarning);}shallowRingMaterial.color.setHex(islandCollision?0xff7048:nearDockChannel?0x62e0d0:islandLevel<1.25?0xf2c967:0xf2d27b);shallowRingMaterial.opacity=islandCollision?.98:islandLevel<1.25?.9:.82;islandHitCooldown=Math.max(0,islandHitCooldown-delta);if(!islandCollision){boat.position.x=nextX;boat.position.z=nextZ;}else{currentSpeed*=.58;if(islandHitCooldown<=0){islandHitCooldown=1.4;stabilityRef.current=clamp(stabilityRef.current-9,8,100);setStability(Math.round(stabilityRef.current));setMessage("島の浅瀬に船首が触れました。舵を切って海側へ旋回してください。");}}
       fragments.forEach((fragment,index)=>{fragment.rotation.y+=delta*(.8+index*.16);const core=fragment.getObjectByName("wind-fragment-core");const ring=fragment.getObjectByName("wind-fragment-ring");if(core)core.rotation.y-=delta*1.8;if(ring)ring.rotation.z+=delta*.7;if(collected.has(index))return;if(Math.hypot(boat.position.x-FRAGMENTS[index].x,boat.position.z-FRAGMENTS[index].z)<3.7){collected.add(index);fragment.visible=false;setPassed(collected.size);setMessage(collected.size===FRAGMENTS.length?"三つの風がそろいました。島の右手前にある桟橋へ向かいます。":`風のかけら ${collected.size} / ${FRAGMENTS.length}。手紙を守る風が増えました。`);}});
       rockMeshes.forEach((rock,index)=>{if(hitRocks.has(index))return;if(Math.hypot(boat.position.x-rock.position.x,boat.position.z-rock.position.z)<2.25){hitRocks.add(index);currentSpeed*=.42;stabilityRef.current=clamp(stabilityRef.current-22,8,100);setStability(Math.round(stabilityRef.current));setMessage("岩礁に船腹をこすりました。帆の安定度が下がっています。");}});
       const dockDistance=Math.hypot(boat.position.x-DOCK.x,boat.position.z-DOCK.z);if(!finishedRef.current&&collected.size===FRAGMENTS.length&&dockDistance<3.2){if(currentSpeed<=1.95){finishedRef.current=true;sailingRef.current=false;setSailing(false);setFinished(true);setComplete(true);celebrating=true;const seconds=Math.max(1,Math.round(missionTime));const grade=stabilityRef.current>=82&&seconds<=70?"星3・静かな名航海":stabilityRef.current>=58?"星2・安全航海":"星1・手紙を届けた航海";setFinalTime(seconds);setRating(grade);setMessage("桟橋へ接岸しました。ミナが朝の手紙を島へ届け、バンザイしています！");if(!rewarded.current){rewarded.current=true;onClearRef.current();}}else{setMessage("桟橋です。帆をゆるめ、3ノット以下まで減速して接岸します。");}}
@@ -382,6 +397,7 @@ export default function SailingM1Game({onClear}:Props){
       {error&&<div className="m1-loading"><span>DEVICE NOTICE</span><strong>{error}</strong></div>}
       <div className="m1-hud"><div><small>WIND FRAGMENTS</small><strong>{passed}<i> / {FRAGMENTS.length}</i></strong></div><div><small>SPEED</small><strong>{speed}<i> kn</i></strong></div><div><small>SAIL</small><strong>{stability}<i> %</i></strong></div><div><small>WIND</small><strong>{wind > 0 ? "+" : ""}{wind}<i>°</i></strong></div><div className="m1-quality">CAMERA<br/>{cameraMode}</div></div>
       <div className="m1-caption"><span>MISSION 01 · MORNING LETTER</span><strong>三つの風を集め、島の桟橋へ手紙を届ける</strong></div>
+      {shoreWarning&&<div className={`m1-shore-alert ${shoreWarning==="浅瀬に接触"?"contact":shoreWarning==="桟橋進入路"?"channel":""}`}>{shoreWarning}</div>}
     </div>
     <div className="m1-console"><p aria-live="polite">{message}</p><div className="m1-controls">
       <button onPointerDown={e=>press(e.currentTarget,e.pointerId,-1)} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>← 左舵</button>

@@ -65,7 +65,8 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(sailingm1, /WIND FRAGMENTS/);
   assert.match(sailingm1, /morning-letter/);
   assert.match(sailingm1, /風向き.*へ近づけると速く/);
-  assert.match(sailingm1, /3ノット以下/);
+  assert.match(sailingm1, /6ノット以下/);
+  assert.match(sailingm1, /nearDockChannel\)currentSpeed=Math\.max/);
   assert.match(sailingm1, /星3・静かな名航海/);
   assert.match(sailingm1, /heading\+=steering\.current/);
   assert.match(sailingm1, /forwardX=Math\.sin\(heading\)/);

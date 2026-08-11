@@ -67,6 +67,11 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(sailingm1, /風向き.*へ近づけると速く/);
   assert.match(sailingm1, /3ノット以下/);
   assert.match(sailingm1, /星3・静かな名航海/);
+  assert.match(sailingm1, /heading\+=steering\.current/);
+  assert.match(sailingm1, /forwardX=Math\.sin\(heading\)/);
+  assert.match(sailingm1, /islandX\*islandX\+islandZ\*islandZ/);
+  assert.match(sailingm1, /inDockChannel/);
+  assert.match(sailingm1, /海側へ旋回してください/);
   assert.doesNotMatch(sailingm1, /FogExp2/);
   assert.match(sailingm1, /scene\.background=new THREE\.Color\(0x4faacc\)/);
   assert.match(source, /localStorage\.setItem/);

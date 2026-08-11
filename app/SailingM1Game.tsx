@@ -304,7 +304,7 @@ export default function SailingM1Game({onClear}:Props){
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     renderer.domElement.setAttribute("aria-label","M1向け高品質な海をミナの船で進む3Dゲーム画面");host.appendChild(renderer.domElement);
-    const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0x72b9c8,.0082);
+    const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0x72b9c8,.0036);
     const camera=new THREE.PerspectiveCamera(55,1,.1,420);camera.position.set(8,7.5,18);
     const sky=new Sky();sky.scale.setScalar(380);scene.add(sky);
     const skyUniforms=(sky.material as THREE.ShaderMaterial).uniforms;

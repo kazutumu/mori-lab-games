@@ -62,6 +62,7 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(sailingm1, /vertexShader/);
   assert.match(sailingm1, /devicePixelRatio\|\|1,2\.25/);
   assert.match(sailingm1, /七つの光門を走破/);
+  assert.match(sailingm1, /FogExp2\(0x72b9c8,\.0036\)/);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

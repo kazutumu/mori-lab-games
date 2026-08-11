@@ -6,13 +6,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const image = `${protocol}://${host}/og.png`;
+  const image = `${protocol}://${host}/og-rpg-v1.png`;
 
   return {
     title: { absolute: "森研究所ゲーム集" },
-    description: "ミナと森を歩き、気配を集め、研究所を育てる小さなゲーム集。",
-    openGraph: { title: "森研究所ゲーム集", description: "昼の星を探す場所。八つの小さなゲーム。", images: [{ url: image, width: 1200, height: 630 }] },
-    twitter: { card: "summary_large_image", title: "森研究所ゲーム集", description: "昼の星を探す場所。八つの小さなゲーム。", images: [image] },
+    description: "ミナと森を歩き、研究所を育てるゲーム集。M1 iPad基準の小規模3D RPG第一章を収録。",
+    openGraph: { title: "森研究所ゲーム集", description: "ミナと森研究所 第一章・消えた記録を収録。", images: [{ url: image, width: 1731, height: 909 }] },
+    twitter: { card: "summary_large_image", title: "森研究所ゲーム集", description: "ミナと森研究所 第一章・消えた記録を収録。", images: [image] },
   };
 }
 

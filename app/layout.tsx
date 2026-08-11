@@ -6,7 +6,7 @@ export const metadata: Metadata = {
     default: "森研究所ゲーム集",
     template: "%s | 森研究所ゲーム集",
   },
-  description: "ミナと森を歩き、研究員を座らせ、クイズに答えて一本の木を育てる森研究所のゲーム集。",
+  description: "ミナと森を歩き、研究所を育てるゲーム集。M1 iPad基準の小規模3D RPG第一章を収録。",
   applicationName: "森研究所ゲーム集",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/og.png", apple: "/og.png" },

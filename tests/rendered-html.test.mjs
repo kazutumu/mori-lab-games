@@ -27,6 +27,8 @@ test("renders the Mori Lab game collection", async () => {
   const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");
   const sailingm1 = await readFile(new URL("../app/SailingM1Game.tsx", import.meta.url), "utf8");
   const brawler2d = await readFile(new URL("../app/Brawler2DGame.tsx", import.meta.url), "utf8");
+  const rpg3d = await readFile(new URL("../app/MinaRPGGame.tsx", import.meta.url), "utf8");
+  const rpgSocialCard = await stat(new URL("../public/og-rpg-v1.png", import.meta.url));
   const individualSprites = await Promise.all([
     ...Array.from({length:6},(_,index)=>stat(new URL(`../public/game-assets/brawler-2d/mina-${index}-v2.png`,import.meta.url))),
     ...Array.from({length:4},(_,index)=>stat(new URL(`../public/game-assets/brawler-2d/guardian-${index}-v2.png`,import.meta.url))),
@@ -95,6 +97,25 @@ test("renders the Mori Lab game collection", async () => {
   assert.doesNotMatch(brawler2d, /WebGLRenderer|GLTFLoader/);
   assert.equal(individualSprites.length,10);
   assert.ok(individualSprites.every(sprite=>sprite.size>100_000&&sprite.size<500_000));
+  assert.match(source, /ミナと森研究所 第一章・消えた記録/);
+  assert.match(source, /lazy\(\(\) => import\("\.\/MinaRPGGame"\)\)/);
+  assert.match(source, /M1 3D RPG · CHAPTER 01/);
+  assert.match(rpg3d, /new THREE\.WebGLRenderer/);
+  assert.match(rpg3d, /function createMina/);
+  assert.match(rpg3d, /風見村/);
+  assert.match(rpg3d, /ひかりの森/);
+  assert.match(rpg3d, /森研究所/);
+  assert.match(rpg3d, /mori-lab-rpg-ch1-v1/);
+  assert.match(rpg3d, /localStorage\.setItem/);
+  assert.match(rpg3d, /setPointerCapture/);
+  assert.match(rpg3d, /onLostPointerCapture/);
+  assert.match(rpg3d, /xpNeeded/);
+  assert.match(rpg3d, /夜の標本/);
+  assert.match(rpg3d, /CHAPTER 1 COMPLETE/);
+  assert.match(rpg3d, /ResizeObserver/);
+  assert.match(rpg3d, /renderer\.dispose/);
+  assert.match(rpg3d, /devicePixelRatio \|\| 1, 2/);
+  assert.ok(rpgSocialCard.size>1_000_000&&rpgSocialCard.size<4_000_000);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

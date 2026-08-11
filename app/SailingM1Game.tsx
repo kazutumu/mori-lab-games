@@ -304,11 +304,11 @@ export default function SailingM1Game({onClear}:Props){
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     renderer.domElement.setAttribute("aria-label","M1向け高品質な海をミナの船で進む3Dゲーム画面");host.appendChild(renderer.domElement);
-    const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0x72b9c8,.0036);
+    const scene=new THREE.Scene();
     const camera=new THREE.PerspectiveCamera(55,1,.1,420);camera.position.set(8,7.5,18);
     const sky=new Sky();sky.scale.setScalar(380);scene.add(sky);
     const skyUniforms=(sky.material as THREE.ShaderMaterial).uniforms;
-    skyUniforms.turbidity.value=7.5;skyUniforms.rayleigh.value=2.6;skyUniforms.mieCoefficient.value=.006;skyUniforms.mieDirectionalG.value=.82;
+    skyUniforms.turbidity.value=3.2;skyUniforms.rayleigh.value=1.65;skyUniforms.mieCoefficient.value=.002;skyUniforms.mieDirectionalG.value=.76;
     const sunVector=new THREE.Vector3().setFromSphericalCoords(1,THREE.MathUtils.degToRad(58),THREE.MathUtils.degToRad(208));
     skyUniforms.sunPosition.value.copy(sunVector);
     scene.add(new THREE.HemisphereLight(0xdff7ff,0x173d3b,1.9));
@@ -321,7 +321,7 @@ export default function SailingM1Game({onClear}:Props){
     const arms=[mina.getObjectByName("m1-arm-left"),mina.getObjectByName("m1-arm-right")] as THREE.Object3D[];
     const hands=[mina.getObjectByName("m1-hand-left"),mina.getObjectByName("m1-hand-right")] as THREE.Object3D[];
     const armRest=arms.map(o=>({p:o.position.clone(),r:o.rotation.clone()}));const handRest=hands.map(o=>o.position.clone());
-    const composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));const bloom=new UnrealBloomPass(new THREE.Vector2(1,1),.22,.35,.84);composer.addPass(bloom);composer.addPass(new OutputPass());
+    const composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));const bloom=new UnrealBloomPass(new THREE.Vector2(1,1),.12,.25,.9);composer.addPass(bloom);composer.addPass(new OutputPass());
     const passedSet=new Set<number>();const missedSet=new Set<number>();let currentSpeed=0;let lastZ=boat.position.z;let elapsed=0;let raf=0;let celebrating=false;let lastSpeed=-1;
     resetScene.current=()=>{boat.position.set(0,0,12);boat.rotation.set(0,0,0);camera.position.set(8,7.5,18);passedSet.clear();missedSet.clear();gates.forEach(g=>{g.visible=true;g.scale.setScalar(1);});currentSpeed=0;lastZ=12;celebrating=false;mina.position.y=.1;arms.forEach((o,i)=>{o.position.copy(armRest[i].p);o.rotation.copy(armRest[i].r);});hands.forEach((o,i)=>o.position.copy(handRest[i]));};
     const resize=()=>{const width=Math.max(1,host.clientWidth),height=Math.max(1,host.clientHeight);renderer.setSize(width,height,false);composer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix();};

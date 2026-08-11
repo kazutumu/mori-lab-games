@@ -3,8 +3,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const Sailing3DGame = lazy(() => import("./Sailing3DGame"));
+const SailingM1Game = lazy(() => import("./SailingM1Game"));
 
-type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d";
+type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d" | "sailingm1";
 
 type SaveData = {
   clears: string[];
@@ -38,6 +39,7 @@ const games = [
   { id: "clockwork", icon: "🕰️", title: "ミナと消えた時間", description: "時計仕掛けの村を歩き、消えた時間のかけらを3つ見つけます。", tag: "立体風探索 · PROTOTYPE" },
   { id: "sailing", icon: "⛵", title: "ミナと風待ち島", description: "帆を開いて五つの風門をくぐり、小さな島のそばを航海します。", tag: "セーリング · ONE ISLAND" },
   { id: "sailing3d", icon: "🌊", title: "ミナと風待ち島 3D", description: "立体のミナが船に乗り、波と光の海で風門を目指す本格3D実験版です。", tag: "REAL 3D · WEBGL" },
+  { id: "sailingm1", icon: "☀️", title: "ミナと風待ち島 M1", description: "M1以降のiPadへ向け、海・空・光・波しぶきを最高品質で描く特別航路です。", tag: "M1 HIGH QUALITY · 7 GATES" },
 ] as const;
 
 const restingGames = [
@@ -178,6 +180,7 @@ export default function GameHub() {
       {mode === "clockwork" && <ClockworkGame onBack={() => openGame("home")} onClear={() => reward("clockwork", 3)} />}
       {mode === "sailing" && <SailingGame onBack={() => openGame("home")} onClear={() => reward("sailing", 4)} />}
       {mode === "sailing3d" && <GameFrame title="ミナと風待ち島 3D" kicker="07 · REAL-TIME 3D SAILING" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">3Dの海を準備しています…</div>}><Sailing3DGame onClear={() => reward("sailing3d", 5)} /></Suspense></GameFrame>}
+      {mode === "sailingm1" && <GameFrame title="ミナと風待ち島 M1" kicker="08 · M1 HIGH QUALITY OCEAN" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">最高品質の海を準備しています…</div>}><SailingM1Game onClear={() => reward("sailingm1", 8)} /></Suspense></GameFrame>}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>
@@ -193,7 +196,7 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
         <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 02</div>
         <h1>遊んだぶんだけ、<br /><em>一本の木</em>が育ちます。</h1>
         <p>ミナと森を歩く。船で島のそばを航海する。小さなクリアが、いつか森研究所になります。</p>
-        <div className="hero-meta"><span>7つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
+        <div className="hero-meta"><span>8つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
       </div>
 
       <div className="growth-scene">

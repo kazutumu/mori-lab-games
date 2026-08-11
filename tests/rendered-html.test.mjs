@@ -25,6 +25,7 @@ test("renders the Mori Lab game collection", async () => {
 
   const source = await readFile(new URL("../app/GameHub.tsx", import.meta.url), "utf8");
   const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");
+  const sailingm1 = await readFile(new URL("../app/SailingM1Game.tsx", import.meta.url), "utf8");
   assert.match(source, /ミナと気配の森/);
   assert.match(source, /昼の星への道/);
   assert.match(source, /森研究所を育てよう/);
@@ -52,6 +53,15 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(sailing3d, /mina-arm-left/);
   assert.match(sailing3d, /ACESFilmicToneMapping/);
   assert.match(sailing3d, /boat-wake-/);
+  assert.match(source, /ミナと風待ち島 M1/);
+  assert.match(source, /M1 HIGH QUALITY OCEAN/);
+  assert.match(source, /lazy\(\(\) => import\("\.\/SailingM1Game"\)\)/);
+  assert.match(sailingm1, /new EffectComposer/);
+  assert.match(sailingm1, /new UnrealBloomPass/);
+  assert.match(sailingm1, /new Sky\(\)/);
+  assert.match(sailingm1, /vertexShader/);
+  assert.match(sailingm1, /devicePixelRatio\|\|1,2\.25/);
+  assert.match(sailingm1, /七つの光門を走破/);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

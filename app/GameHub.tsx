@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork";
+type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing";
 
 type SaveData = {
   clears: string[];
@@ -34,6 +34,7 @@ const games = [
   { id: "quiz", icon: "⭐", title: "ミナ世界クイズ", description: "公開済み作品だけから出題。レベルが上がると問題数も増えます。", tag: "クイズ · 3 LEVELS" },
   { id: "idle", icon: "🌲", title: "森研究所を育てよう", description: "本棚2・灯り2・椅子1をそろえて、小さな研究所を動かします。", tag: "育成 · GOAL MODE" },
   { id: "clockwork", icon: "🕰️", title: "ミナと消えた時間", description: "時計仕掛けの村を歩き、消えた時間のかけらを3つ見つけます。", tag: "立体風探索 · PROTOTYPE" },
+  { id: "sailing", icon: "⛵", title: "ミナと風待ち島", description: "帆を開いて五つの風門をくぐり、小さな島のそばを航海します。", tag: "セーリング · ONE ISLAND" },
 ] as const;
 
 const restingGames = [
@@ -172,6 +173,7 @@ export default function GameHub() {
       {mode === "chair" && <ChairGame save={save} onBack={() => openGame("home")} onClear={(level) => reward(`chair-${level}`, 2 + level, { chairLevel: Math.min(5, Math.max(save.chairLevel, level + 1)) })} />}
       {mode === "quiz" && <QuizGame save={save} onBack={() => openGame("home")} onClear={(level) => reward(`quiz-${level}`, level, { quizLevel: Math.min(3, Math.max(save.quizLevel, level + 1)) })} />}
       {mode === "clockwork" && <ClockworkGame onBack={() => openGame("home")} onClear={() => reward("clockwork", 3)} />}
+      {mode === "sailing" && <SailingGame onBack={() => openGame("home")} onClear={() => reward("sailing", 4)} />}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>
@@ -186,8 +188,8 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
       <div className="hero">
         <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 02</div>
         <h1>遊んだぶんだけ、<br /><em>一本の木</em>が育ちます。</h1>
-        <p>ミナと森を歩く。研究員を椅子へ戻す。公開済み作品を思い出す。小さなクリアが、いつか森研究所になります。</p>
-        <div className="hero-meta"><span>5つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
+        <p>ミナと森を歩く。船で島のそばを航海する。小さなクリアが、いつか森研究所になります。</p>
+        <div className="hero-meta"><span>6つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
       </div>
 
       <div className="growth-scene">
@@ -329,6 +331,150 @@ function ClockworkGame({ onBack, onClear }: { onBack: () => void; onClear: () =>
       </div>
     </div>
     {complete && <ResultCard icon="🕰️" title="消えた時間を見つけました" text="木へ成長ポイントが3つ届きました。" />}
+  </GameFrame>;
+}
+
+const sailingGates = [
+  { step: 2, lane: 1 },
+  { step: 4, lane: 3 },
+  { step: 6, lane: 0 },
+  { step: 8, lane: 4 },
+  { step: 10, lane: 2 },
+];
+
+type VoyageState = {
+  lane: number;
+  step: number;
+  passed: number;
+  missed: number;
+  sailing: boolean;
+  complete: boolean;
+  finished: boolean;
+  message: string;
+};
+
+const initialVoyage: VoyageState = {
+  lane: 2,
+  step: 0,
+  passed: 0,
+  missed: 0,
+  sailing: false,
+  complete: false,
+  finished: false,
+  message: "左右に舵を切り、帆を開いて出航しましょう。",
+};
+
+function sailingObjectStyle(lane: number, relativeStep: number): React.CSSProperties {
+  const scale = clamp(1.08 - relativeStep * .095, .34, 1.08);
+  return {
+    left: `${50 + (lane - 2) * (16 - relativeStep * .8)}%`,
+    bottom: `${82 + relativeStep * 46}px`,
+    transform: `translateX(-50%) scale(${scale})`,
+    zIndex: 50 - relativeStep,
+  };
+}
+
+function SailingGame({ onBack, onClear }: { onBack: () => void; onClear: () => void }) {
+  const [voyage, setVoyage] = useState<VoyageState>(initialVoyage);
+  const rewarded = useRef(false);
+
+  const advance = useCallback(() => {
+    setVoyage((current) => {
+      if (!current.sailing || current.finished) return current;
+      const nextStep = current.step + 1;
+      if (nextStep === 5 && current.lane === 2) {
+        return { ...current, sailing: false, message: "風待ち島の浅瀬です。左右へ舵を切ってから、もう一度帆を開きましょう。" };
+      }
+      const gateIndex = sailingGates.findIndex((gate) => gate.step === nextStep);
+      const gatePassed = gateIndex >= 0 && sailingGates[gateIndex].lane === current.lane;
+      const nextPassed = current.passed + (gatePassed ? 1 : 0);
+      const nextMissed = current.missed + (gateIndex >= 0 && !gatePassed ? 1 : 0);
+      const finished = nextStep >= 11;
+      const complete = finished && nextPassed === sailingGates.length;
+      let message = "風が帆を押しています。次の風門を見つけましょう。";
+      if (gatePassed) message = `風門${gateIndex + 1}を通過しました。`;
+      else if (gateIndex >= 0) message = `風門${gateIndex + 1}を通り過ぎました。次は舵を合わせましょう。`;
+      if (finished) message = complete ? "五つの風門を通り、静かな航海を終えました。" : "港へ戻りました。通れなかった風門を、もう一度探してみましょう。";
+      return { ...current, step: nextStep, passed: nextPassed, missed: nextMissed, sailing: finished ? false : current.sailing, finished, complete, message };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!voyage.sailing || voyage.finished) return;
+    const timer = window.setInterval(advance, 900);
+    return () => window.clearInterval(timer);
+  }, [advance, voyage.finished, voyage.sailing]);
+
+  useEffect(() => {
+    if (voyage.complete && !rewarded.current) {
+      rewarded.current = true;
+      onClear();
+    }
+  }, [onClear, voyage.complete]);
+
+  const steer = useCallback((direction: number) => {
+    setVoyage((current) => current.finished ? current : {
+      ...current,
+      lane: clamp(current.lane + direction, 0, 4),
+      message: direction < 0 ? "左へ舵を切りました。" : "右へ舵を切りました。",
+    });
+  }, []);
+
+  const toggleSail = useCallback(() => {
+    setVoyage((current) => current.finished ? current : {
+      ...current,
+      sailing: !current.sailing,
+      message: current.sailing ? "帆をたたみました。ここで風を読みます。" : "帆を開きました。風に乗って進みます。",
+    });
+  }, []);
+
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") { event.preventDefault(); steer(-1); }
+      if (event.key === "ArrowRight") { event.preventDefault(); steer(1); }
+      if (event.key === " ") { event.preventDefault(); toggleSail(); }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [steer, toggleSail]);
+
+  const reset = () => {
+    rewarded.current = false;
+    setVoyage(initialVoyage);
+  };
+  const islandRelative = 5 - voyage.step;
+
+  return <GameFrame title="ミナと風待ち島" kicker="06 · SAILING PROTOTYPE" onBack={onBack}>
+    <div className="sailing-game">
+      <div className="sailing-hud">
+        <div><small>COURSE</small><strong>風待ち島をまわる航路</strong></div>
+        <div><small>風門</small><strong>{voyage.passed} / {sailingGates.length}</strong></div>
+        <div><small>進み具合</small><strong>{Math.min(voyage.step, 11)} / 11</strong></div>
+      </div>
+      <div className={`sailing-stage ${voyage.sailing ? "underway" : ""}`} role="img" aria-label="小さな島と五つの風門がある立体風の海">
+        <div className="sailing-sky"><i /><i /><span>☀</span></div>
+        <div className="sailing-ocean"><i /><i /><i /><i /><i /></div>
+        {islandRelative >= -1 && islandRelative <= 7 && <div className="sailing-island" style={sailingObjectStyle(2, islandRelative)} aria-label="風待ち島"><i /><b /><span /><em /></div>}
+        {sailingGates.map((gate, index) => {
+          const relative = gate.step - voyage.step;
+          if (relative < 0 || relative > 7) return null;
+          return <div className="wind-gate" style={sailingObjectStyle(gate.lane, relative)} key={gate.step} aria-label={`風門${index + 1}`}><i /><b /><span>{index + 1}</span></div>;
+        })}
+        <div className={`sailboat ${voyage.sailing ? "sails-open" : ""}`} data-testid="sailing-boat" data-lane={voyage.lane} style={{ left: `${50 + (voyage.lane - 2) * 16}%` }} aria-label={`ミナの船 航路${voyage.lane + 1}`}>
+          <i className="boat-mast" /><b className="boat-sail" /><span className="boat-hull" /><em className="boat-wake" />
+        </div>
+      </div>
+      <div className="sailing-console">
+        <p aria-live="polite">{voyage.message}</p>
+        <div className="sailing-controls">
+          <button onClick={() => steer(-1)} aria-label="左へ舵を切る">← <span>左へ</span></button>
+          <button className={voyage.sailing ? "sail-action active" : "sail-action"} onClick={toggleSail} disabled={voyage.finished}>{voyage.sailing ? "帆をたたむ" : "帆を開く"}</button>
+          <button onClick={() => steer(1)} aria-label="右へ舵を切る"><span>右へ</span> →</button>
+        </div>
+        <div className="sailing-note">島の正面は浅瀬です。左右へよけて進みます。<span>キーボード：← → / Space</span></div>
+      </div>
+    </div>
+    {voyage.finished && (voyage.complete ? <ResultCard icon="⛵" title="風待ち島を一周しました" text="木へ成長ポイントが4つ届きました。" /> : <div className="sailing-retry"><ResultCard icon="↻" title={`${voyage.missed}つの風門を見失いました`} text="航路は短いので、舵を合わせてもう一度試せます。" /><button onClick={reset}>もう一度出航する</button></div>)}
   </GameFrame>;
 }
 

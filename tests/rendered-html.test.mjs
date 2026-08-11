@@ -26,6 +26,7 @@ test("renders the Mori Lab game collection", async () => {
   const source = await readFile(new URL("../app/GameHub.tsx", import.meta.url), "utf8");
   const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");
   const sailingm1 = await readFile(new URL("../app/SailingM1Game.tsx", import.meta.url), "utf8");
+  const brawler3d = await readFile(new URL("../app/Brawler3DGame.tsx", import.meta.url), "utf8");
   assert.match(source, /ミナと気配の森/);
   assert.match(source, /昼の星への道/);
   assert.match(source, /森研究所を育てよう/);
@@ -79,6 +80,16 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(sailingm1, /shallowRingMaterial/);
   assert.doesNotMatch(sailingm1, /FogExp2/);
   assert.match(sailingm1, /scene\.background=new THREE\.Color\(0x4faacc\)/);
+  assert.match(source, /ミナと夜の研究路/);
+  assert.match(source, /lazy\(\(\) => import\("\.\/Brawler3DGame"\)\)/);
+  assert.match(source, /M1 3D BRAWLER/);
+  assert.match(brawler3d, /new THREE\.WebGLRenderer/);
+  assert.match(brawler3d, /function createMina/);
+  assert.match(brawler3d, /リアル寄り3Dのミナ/);
+  assert.match(brawler3d, /三段攻撃/);
+  assert.match(brawler3d, /NIGHT SHADOWS/);
+  assert.match(brawler3d, /setPointerCapture/);
+  assert.match(brawler3d, /ACESFilmicToneMapping/);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

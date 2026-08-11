@@ -4,8 +4,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 
 const Sailing3DGame = lazy(() => import("./Sailing3DGame"));
 const SailingM1Game = lazy(() => import("./SailingM1Game"));
+const Brawler3DGame = lazy(() => import("./Brawler3DGame"));
 
-type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d" | "sailingm1";
+type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d" | "sailingm1" | "brawler3d";
 
 type SaveData = {
   clears: string[];
@@ -40,6 +41,7 @@ const games = [
   { id: "sailing", icon: "⛵", title: "ミナと風待ち島", description: "帆を開いて五つの風門をくぐり、小さな島のそばを航海します。", tag: "セーリング · ONE ISLAND" },
   { id: "sailing3d", icon: "🌊", title: "ミナと風待ち島 3D", description: "立体のミナが船に乗り、波と光の海で風門を目指す本格3D実験版です。", tag: "REAL 3D · WEBGL" },
   { id: "sailingm1", icon: "✉️", title: "ミナと風待ち島 M1・朝の手紙", description: "三つの風を集め、岩礁を避け、島の桟橋へ朝の手紙を届けるM1向け航海ゲームです。", tag: "M1 MISSION · MORNING LETTER" },
+  { id: "brawler3d", icon: "🥊", title: "ミナと夜の研究路", description: "奥行きのある夜道を進み、三段攻撃で影を静めるM1向け3Dベルトスクロール実験版です。", tag: "M1 3D BRAWLER · NIGHT ROAD" },
 ] as const;
 
 const restingGames = [
@@ -181,6 +183,7 @@ export default function GameHub() {
       {mode === "sailing" && <SailingGame onBack={() => openGame("home")} onClear={() => reward("sailing", 4)} />}
       {mode === "sailing3d" && <GameFrame title="ミナと風待ち島 3D" kicker="07 · REAL-TIME 3D SAILING" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">3Dの海を準備しています…</div>}><Sailing3DGame onClear={() => reward("sailing3d", 5)} /></Suspense></GameFrame>}
       {mode === "sailingm1" && <GameFrame title="ミナと風待ち島 M1・朝の手紙" kicker="08 · MISSION 01 · MORNING LETTER" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">朝の航路を準備しています…</div>}><SailingM1Game onClear={() => reward("sailingm1", 8)} /></Suspense></GameFrame>}
+      {mode === "brawler3d" && <GameFrame title="ミナと夜の研究路" kicker="09 · MISSION 02 · M1 3D BRAWLER" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">夜の研究路を準備しています…</div>}><Brawler3DGame onClear={() => reward("brawler3d", 8)} /></Suspense></GameFrame>}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>
@@ -196,7 +199,7 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
         <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 02</div>
         <h1>遊んだぶんだけ、<br /><em>一本の木</em>が育ちます。</h1>
         <p>ミナと森を歩く。船で島のそばを航海する。小さなクリアが、いつか森研究所になります。</p>
-        <div className="hero-meta"><span>8つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
+        <div className="hero-meta"><span>9つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
       </div>
 
       <div className="growth-scene">

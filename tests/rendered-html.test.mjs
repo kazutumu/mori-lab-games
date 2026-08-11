@@ -30,6 +30,9 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(source, /ちょっとだけボタン/);
   assert.match(source, /研究員を座らせろ/);
   assert.match(source, /ミナ世界クイズ/);
+  assert.match(source, /ミナと消えた時間/);
+  assert.match(source, /clockwork-stage/);
+  assert.match(source, /CLOCKWORK VILLAGE PROTOTYPE/);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

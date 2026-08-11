@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz";
+type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork";
 
 type SaveData = {
   clears: string[];
@@ -33,6 +33,7 @@ const games = [
   { id: "chair", icon: "🦄", title: "研究員を座らせろ！", description: "急発進する研究員を捕まえて着席。レベルごとに速くなります。", tag: "保護 · 5 LEVELS" },
   { id: "quiz", icon: "⭐", title: "ミナ世界クイズ", description: "公開済み作品だけから出題。レベルが上がると問題数も増えます。", tag: "クイズ · 3 LEVELS" },
   { id: "idle", icon: "🌲", title: "森研究所を育てよう", description: "本棚2・灯り2・椅子1をそろえて、小さな研究所を動かします。", tag: "育成 · GOAL MODE" },
+  { id: "clockwork", icon: "🕰️", title: "ミナと消えた時間", description: "時計仕掛けの村を歩き、消えた時間のかけらを3つ見つけます。", tag: "立体風探索 · PROTOTYPE" },
 ] as const;
 
 const restingGames = [
@@ -170,6 +171,7 @@ export default function GameHub() {
       {mode === "chotto" && <ChottoGame onBack={() => openGame("home")} onClear={() => reward("chotto", 1)} />}
       {mode === "chair" && <ChairGame save={save} onBack={() => openGame("home")} onClear={(level) => reward(`chair-${level}`, 2 + level, { chairLevel: Math.min(5, Math.max(save.chairLevel, level + 1)) })} />}
       {mode === "quiz" && <QuizGame save={save} onBack={() => openGame("home")} onClear={(level) => reward(`quiz-${level}`, level, { quizLevel: Math.min(3, Math.max(save.quizLevel, level + 1)) })} />}
+      {mode === "clockwork" && <ClockworkGame onBack={() => openGame("home")} onClear={() => reward("clockwork", 3)} />}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>
@@ -185,7 +187,7 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
         <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 02</div>
         <h1>遊んだぶんだけ、<br /><em>一本の木</em>が育ちます。</h1>
         <p>ミナと森を歩く。研究員を椅子へ戻す。公開済み作品を思い出す。小さなクリアが、いつか森研究所になります。</p>
-        <div className="hero-meta"><span>4つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
+        <div className="hero-meta"><span>5つの育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
       </div>
 
       <div className="growth-scene">
@@ -199,7 +201,7 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
         {games.map((game, index) => {
           const cleared = save.clears.some((id) => id === game.id || id.startsWith(`${game.id}-`) || (game.id === "idle" && id === "idle-goal"));
           return (
-            <button className="game-card" key={game.id} onClick={() => openGame(game.id)}>
+            <button className="game-card" data-game-id={game.id} key={game.id} onClick={() => openGame(game.id)}>
               <span className="card-number">0{index + 1}</span>
               <span className="card-icon">{game.icon}</span>
               <span className="card-copy"><small>{game.tag}</small><strong>{game.title}</strong><p>{game.description}</p></span>
@@ -212,6 +214,122 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
       <aside className="notice"><strong>研究員へ</strong><p>クリアすると木が育ちます。ただし木を一晩で森にしようとする行為は、保護担当の観察対象です。</p><span>🦄 椅子、あります。</span></aside>
     </section>
   );
+}
+
+const clockworkItems = [
+  { x: 1, y: 2, name: "朝のひとかけら" },
+  { x: 5, y: 2, name: "昼のひとかけら" },
+  { x: 2, y: 5, name: "夕方のひとかけら" },
+];
+
+const clockworkBlocked = new Set(["0-0", "1-0", "0-1", "5-0", "6-0", "6-1", "0-5", "0-6", "1-6", "5-5", "6-5", "5-6", "6-6"]);
+const clockworkWater = new Set(["5-5", "6-5", "5-6", "6-6"]);
+const clockworkHouses = [
+  { x: 0, y: 0, color: "rust" },
+  { x: 6, y: 0, color: "gold" },
+  { x: 0, y: 6, color: "green" },
+];
+const clockworkTrees = [[1, 0], [0, 2], [6, 2], [1, 5], [4, 6]];
+
+function isoPosition(x: number, y: number, lift = 0): React.CSSProperties {
+  return {
+    left: `calc(50% + ${(x - y) * 35}px)`,
+    top: `${30 + (x + y) * 20 - lift}px`,
+    zIndex: 10 + x + y,
+  };
+}
+
+function ClockworkGame({ onBack, onClear }: { onBack: () => void; onClear: () => void }) {
+  const [position, setPosition] = useState({ x: 3, y: 3 });
+  const [found, setFound] = useState<number[]>([]);
+  const [message, setMessage] = useState("村の時計が止まっています。時間のかけらを3つ探しましょう。");
+  const rewarded = useRef(false);
+  const complete = found.length === clockworkItems.length;
+
+  useEffect(() => {
+    if (complete && !rewarded.current) {
+      rewarded.current = true;
+      onClear();
+    }
+  }, [complete, onClear]);
+
+  const move = useCallback((dx: number, dy: number) => {
+    setPosition((current) => {
+      const next = { x: clamp(current.x + dx, 0, 6), y: clamp(current.y + dy, 0, 6) };
+      const nextKey = `${next.x}-${next.y}`;
+      if (clockworkBlocked.has(nextKey)) {
+        setMessage(clockworkWater.has(nextKey) ? "水路の向こうで、歯車の音がしました。" : "小さな家の灯りが揺れています。");
+        return current;
+      }
+      if (next.x === current.x && next.y === current.y) return current;
+      const itemIndex = clockworkItems.findIndex((item) => item.x === next.x && item.y === next.y);
+      if (itemIndex >= 0 && !found.includes(itemIndex)) {
+        setFound((items) => items.includes(itemIndex) ? items : [...items, itemIndex]);
+        setMessage(`「${clockworkItems[itemIndex].name}」を見つけました。`);
+      } else {
+        const villageMessages = ["石畳が、かすかに鳴りました。", "風車が一目盛りだけ動きました。", "窓の奥に、小さな灯りが見えます。", "時計塔から、眠そうな音がします。"];
+        setMessage(villageMessages[(next.x + next.y * 2) % villageMessages.length]);
+      }
+      return next;
+    });
+  }, [found]);
+
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+      if (moves[event.key]) { event.preventDefault(); move(...moves[event.key]); }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [move]);
+
+  const reset = () => {
+    setPosition({ x: 3, y: 3 });
+    setFound([]);
+    setMessage("村の時計が止まっています。時間のかけらを3つ探しましょう。");
+    rewarded.current = false;
+  };
+
+  return <GameFrame title="ミナと消えた時間" kicker="05 · CLOCKWORK VILLAGE PROTOTYPE" onBack={onBack}>
+    <div className="clockwork-game">
+      <div className="clockwork-hud">
+        <div><small>OBJECTIVE</small><strong>{complete ? "村の時間を見つけました" : "消えた時間のかけらを探す"}</strong></div>
+        <div className="clockwork-count"><span>{found.length}</span> / {clockworkItems.length}</div>
+      </div>
+      <div className="clockwork-stage" role="img" aria-label="時計塔と小さな家がある、斜め見下ろしの時計仕掛けの村">
+        <div className="clockwork-sky"><i /><i /><i /></div>
+        <div className="clockwork-world">
+          {Array.from({ length: 49 }, (_, index) => {
+            const x = index % 7;
+            const y = Math.floor(index / 7);
+            const key = `${x}-${y}`;
+            const tile = clockworkWater.has(key) ? "water" : (x === 3 || y === 3 ? "path" : "grass");
+            return <span className={`iso-tile tile-${tile}`} style={isoPosition(x, y)} key={key} aria-hidden="true" />;
+          })}
+          <div className={`clock-tower ${complete ? "awake" : ""}`} style={isoPosition(3, 0, 58)} aria-hidden="true"><i><b /></i><span /></div>
+          {clockworkHouses.map((house) => <div className={`clock-house house-${house.color}`} style={isoPosition(house.x, house.y, 42)} key={`${house.x}-${house.y}`} aria-hidden="true"><i /><span /></div>)}
+          {clockworkTrees.map(([x, y]) => <div className="clock-tree" style={isoPosition(x, y, 34)} key={`${x}-${y}`} aria-hidden="true"><i /><b /></div>)}
+          {clockworkItems.map((item, index) => !found.includes(index) && <div className="time-shard" style={isoPosition(item.x, item.y, 26)} key={item.name} aria-label={item.name}><i>✦</i></div>)}
+          <div className="clockwork-mina" data-testid="clockwork-player" data-position={`${position.x},${position.y}`} style={isoPosition(position.x, position.y, 30)} aria-label={`ミナの位置 ${position.x},${position.y}`}><i /><b /><span /></div>
+        </div>
+      </div>
+      <div className="clockwork-console">
+        <p className="clockwork-message" aria-live="polite">{complete ? "三つの時間がつながり、時計塔が動き始めました。" : message}</p>
+        <div className="time-list">{clockworkItems.map((item, index) => <span className={found.includes(index) ? "found" : ""} key={item.name}><i>{found.includes(index) ? "✦" : "◇"}</i>{found.includes(index) ? item.name : "まだ見つからない時間"}</span>)}</div>
+        <div className="clockwork-controls">
+          <div className="dpad" aria-label="村の移動ボタン">
+            <button onClick={() => move(0, -1)} aria-label="上へ進む">↑</button>
+            <button onClick={() => move(-1, 0)} aria-label="左へ進む">←</button>
+            <button className="dpad-center" aria-hidden="true">•</button>
+            <button onClick={() => move(1, 0)} aria-label="右へ進む">→</button>
+            <button onClick={() => move(0, 1)} aria-label="下へ進む">↓</button>
+          </div>
+          <button className="text-button" onClick={reset}>村の入口からやり直す</button>
+        </div>
+      </div>
+    </div>
+    {complete && <ResultCard icon="🕰️" title="消えた時間を見つけました" text="木へ成長ポイントが3つ届きました。" />}
+  </GameFrame>;
 }
 
 function GameFrame({ title, kicker, onBack, children }: { title: string; kicker: string; onBack: () => void; children: React.ReactNode }) {

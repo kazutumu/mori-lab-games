@@ -13,8 +13,8 @@
 ## ファイル
 
 - `mina-character-turnaround-v1.png`：正面・左側面・背面の制作資料
-- `public/models/mina/mina-game-model-v1.glb`：ゲームが読み込む専用3Dモデル
-- `scripts/build-mina-model.mjs`：GLBを再生成するスクリプト
+- `archive/mina-game-model-v1.glb`：2D版へ切り替える前の3D試作モデル
+- `scripts/build-mina-model.mjs`：3D試作モデルを再生成するスクリプト
 
 ## 生成資料のプロンプト要旨
 

@@ -109,5 +109,5 @@ root.traverse((object) => { if (object.isMesh) { object.castShadow = true; objec
 
 const exporter = new GLTFExporter();
 const glb = await exporter.parseAsync(root, { binary: true, onlyVisible: true, trs: true });
-await writeFile(new URL("../public/models/mina/mina-game-model-v1.glb", import.meta.url), Buffer.from(glb));
+await writeFile(new URL("../design/mina-model/archive/mina-game-model-v1.glb", import.meta.url), Buffer.from(glb));
 console.log(`mina-game-model-v1.glb ${glb.byteLength} bytes`);

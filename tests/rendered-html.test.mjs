@@ -24,6 +24,7 @@ test("renders the Mori Lab game collection", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 
   const source = await readFile(new URL("../app/GameHub.tsx", import.meta.url), "utf8");
+  const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");
   assert.match(source, /ミナと気配の森/);
   assert.match(source, /昼の星への道/);
   assert.match(source, /森研究所を育てよう/);
@@ -36,6 +37,13 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(source, /ミナと風待ち島/);
   assert.match(source, /SAILING PROTOTYPE/);
   assert.match(source, /sailing-island/);
+  assert.match(source, /ミナと風待ち島 3D/);
+  assert.match(source, /REAL-TIME 3D SAILING/);
+  assert.match(source, /lazy\(\(\) => import\("\.\/Sailing3DGame"\)\)/);
+  assert.match(sailing3d, /new THREE\.WebGLRenderer/);
+  assert.match(sailing3d, /function createMina/);
+  assert.match(sailing3d, /立体のミナ/);
+  assert.match(sailing3d, /devicePixelRatio \|\| 1, 1\.5/);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

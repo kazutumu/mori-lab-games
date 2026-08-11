@@ -11,8 +11,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { absolute: "森研究所ゲーム集" },
     description: "ミナと森を歩き、気配を集め、研究所を育てる小さなゲーム集。",
-    openGraph: { title: "森研究所ゲーム集", description: "昼の星を探す場所。六つの小さなゲーム。", images: [{ url: image, width: 1200, height: 630 }] },
-    twitter: { card: "summary_large_image", title: "森研究所ゲーム集", description: "昼の星を探す場所。六つの小さなゲーム。", images: [image] },
+    openGraph: { title: "森研究所ゲーム集", description: "昼の星を探す場所。七つの小さなゲーム。", images: [{ url: image, width: 1200, height: 630 }] },
+    twitter: { card: "summary_large_image", title: "森研究所ゲーム集", description: "昼の星を探す場所。七つの小さなゲーム。", images: [image] },
   };
 }
 

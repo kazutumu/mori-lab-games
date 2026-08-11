@@ -151,8 +151,8 @@ function createMina() {
     leg.rotation.x = Math.PI / 2.9;
     mina.add(leg);
   });
-  mina.position.set(0, .15, .65);
-  mina.rotation.y = -.18;
+  mina.position.set(0, .15, .72);
+  mina.rotation.y = Math.PI + .08;
   return mina;
 }
 
@@ -183,7 +183,7 @@ function createBoat() {
   redStripe.position.set(-.16, 5.05, -.46);
   boat.add(redStripe);
   const wheel = shadow(new THREE.Mesh(new THREE.TorusGeometry(.58, .08, 8, 24), material(0x704a32)));
-  wheel.position.set(0, 2.45, 1.3);
+  wheel.position.set(0, 2.45, -.05);
   boat.add(wheel);
   boat.add(createMina());
   const flag = shadow(new THREE.Mesh(new THREE.PlaneGeometry(1.35, .65), new THREE.MeshStandardMaterial({ color: 0xe2bc55, side: THREE.DoubleSide })));
@@ -238,6 +238,7 @@ export default function Sailing3DGame({ onClear }: Props) {
     rewarded.current = false;
     finishedRef.current = false;
     sailingRef.current = false;
+    steering.current = 0;
     setSailing(false);
     setPassed(0);
     setProgress(0);
@@ -368,16 +369,21 @@ export default function Sailing3DGame({ onClear }: Props) {
       if (normalFrame % 5 === 0) oceanGeometry.computeVertexNormals();
 
       sail.scale.x += ((sailingRef.current ? 1 : .08) - sail.scale.x) * Math.min(1, delta * 5);
-      if (sailingRef.current && !voyageFinished) {
-        boat.position.x = clamp(boat.position.x + steering.current * delta * 7.6, -11, 11);
-        boat.position.z -= delta * 7.2;
-        const islandDistance = Math.hypot(boat.position.x - island.position.x, boat.position.z - island.position.z);
-        if (islandDistance < 7.4) {
-          boat.position.z = lastBoatZ;
-          sailingRef.current = false;
-          setSailing(false);
-          setMessage("風待ち島の浅瀬です。左右へ舵を切ってから、帆を開き直しましょう。");
+      if (!voyageFinished) {
+        const sideSpeed = sailingRef.current ? 8.6 : 4.8;
+        const nextX = clamp(boat.position.x + steering.current * delta * sideSpeed, -11, 11);
+        const nextZ = sailingRef.current ? boat.position.z - delta * 7.2 : boat.position.z;
+        const islandDistance = Math.hypot(nextX - island.position.x, nextZ - island.position.z);
+        boat.position.x = nextX;
+        if (sailingRef.current && islandDistance >= 7.4) {
+          boat.position.z = nextZ;
+        } else if (sailingRef.current && steering.current !== 0) {
+          setMessage("風待ち島の浅瀬です。舵を押したまま横へ抜けられます。");
+        } else if (sailingRef.current) {
+          setMessage("風待ち島の浅瀬です。左か右へ舵を切ると抜けられます。");
         }
+      }
+      if (sailingRef.current && !voyageFinished) {
         GATES.forEach((gate, index) => {
           if (passedGates.has(index) || missedGates.has(index)) return;
           if (lastBoatZ > gate.z && boat.position.z <= gate.z) {
@@ -397,6 +403,7 @@ export default function Sailing3DGame({ onClear }: Props) {
 
       boat.position.y = .2 + Math.sin(elapsed * 2.1) * .16;
       boat.rotation.z += ((-steering.current * .16) - boat.rotation.z) * Math.min(1, delta * 3.8);
+      boat.rotation.y += ((-steering.current * .18) - boat.rotation.y) * Math.min(1, delta * 3.8);
       boat.rotation.x = Math.sin(elapsed * 1.5) * .025;
       camera.position.x += ((boat.position.x + 7) - camera.position.x) * Math.min(1, delta * 2.3);
       camera.position.z += ((boat.position.z + 16) - camera.position.z) * Math.min(1, delta * 2.3);
@@ -444,7 +451,10 @@ export default function Sailing3DGame({ onClear }: Props) {
     };
   }, [toggleSail]);
 
-  const pressSteer = (direction: number) => { steering.current = direction; };
+  const pressSteer = (button: HTMLButtonElement, pointerId: number, direction: number) => {
+    button.setPointerCapture(pointerId);
+    steering.current = direction;
+  };
   const releaseSteer = () => { steering.current = 0; };
 
   return <div className="sailing3d-game">
@@ -461,9 +471,10 @@ export default function Sailing3DGame({ onClear }: Props) {
     <div className="sailing3d-console">
       <p aria-live="polite">{message}</p>
       <div className="sailing3d-controls">
-        <button onPointerDown={() => pressSteer(-1)} onPointerUp={releaseSteer} onPointerCancel={releaseSteer} onPointerLeave={releaseSteer} aria-label="3D船を左へ操舵">← <span>左へ</span></button>
+        <button onPointerDown={(event) => pressSteer(event.currentTarget, event.pointerId, -1)} onPointerUp={releaseSteer} onPointerCancel={releaseSteer} onLostPointerCapture={releaseSteer} aria-label="3D船を左へ操舵">← <span>左へ</span></button>
         <button className={sailing ? "three-sail active" : "three-sail"} onClick={toggleSail} disabled={finished || Boolean(error)}>{sailing ? "帆をたたむ" : "帆を開く"}</button>
-        <button onPointerDown={() => pressSteer(1)} onPointerUp={releaseSteer} onPointerCancel={releaseSteer} onPointerLeave={releaseSteer} aria-label="3D船を右へ操舵"><span>右へ</span> →</button>
+        <button onPointerDown={(event) => pressSteer(event.currentTarget, event.pointerId, 1)} onPointerUp={releaseSteer} onPointerCancel={releaseSteer} onLostPointerCapture={releaseSteer} aria-label="3D船を右へ操舵"><span>右へ</span> →</button>
+        <button className="three-reset" onClick={reset} disabled={Boolean(error)}>最初から</button>
       </div>
       <div className="sailing3d-note"><span>長押しで舵を切ります</span><span>キーボード：← → / Space</span></div>
     </div>

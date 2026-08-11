@@ -48,6 +48,10 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(sailing3d, /浅瀬です。舵を押したまま横へ抜けられます/);
   assert.match(sailing3d, /mina\.rotation\.y = Math\.PI/);
   assert.match(sailing3d, />最初から<\/button>/);
+  assert.match(sailing3d, /celebrating = cleared/);
+  assert.match(sailing3d, /mina-arm-left/);
+  assert.match(sailing3d, /ACESFilmicToneMapping/);
+  assert.match(sailing3d, /boat-wake-/);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

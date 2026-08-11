@@ -127,6 +127,10 @@ function createMina() {
   backHair.scale.set(1, 1.25, .62);
   backHair.position.set(0, 3.28, -.42);
   mina.add(backHair);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(.07, 10, 7), skin);
+  nose.scale.set(.72, 1, .8);
+  nose.position.set(0, 3.38, .59);
+  mina.add(nose);
   [-.2, .2].forEach((x) => {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(.045, 8, 6), material(0x222522));
     eye.position.set(x, 3.5, .56);
@@ -139,11 +143,13 @@ function createMina() {
 
   [-1, 1].forEach((side) => {
     const arm = shadow(new THREE.Mesh(new THREE.CapsuleGeometry(.14, .7, 5, 8), yellow));
+    arm.name = side < 0 ? "mina-arm-left" : "mina-arm-right";
     arm.position.set(side * .55, 2.45, .35);
     arm.rotation.z = side * -.48;
     arm.rotation.x = .35;
     mina.add(arm);
     const hand = shadow(new THREE.Mesh(new THREE.SphereGeometry(.17, 10, 8), skin));
+    hand.name = side < 0 ? "mina-hand-left" : "mina-hand-right";
     hand.position.set(side * .82, 2.12, .68);
     mina.add(hand);
     const leg = shadow(new THREE.Mesh(new THREE.CapsuleGeometry(.16, .62, 5, 8), dark));
@@ -167,6 +173,18 @@ function createBoat() {
   const deck = shadow(new THREE.Mesh(new THREE.BoxGeometry(2.5, .28, 3.8), material(0xc5894b)));
   deck.position.set(0, 1.35, .5);
   boat.add(deck);
+  const railMaterial = material(0x6b4630, .6);
+  [-1.12, 1.12].forEach((x) => {
+    [-.9, .25, 1.35].forEach((z) => {
+      const post = shadow(new THREE.Mesh(new THREE.CylinderGeometry(.035, .045, .72, 7), railMaterial));
+      post.position.set(x, 1.82, z);
+      boat.add(post);
+    });
+    const rail = shadow(new THREE.Mesh(new THREE.CylinderGeometry(.035, .045, 2.5, 7), railMaterial));
+    rail.rotation.x = Math.PI / 2;
+    rail.position.set(x, 2.16, .25);
+    boat.add(rail);
+  });
   const cabin = shadow(new THREE.Mesh(new THREE.BoxGeometry(1.45, .8, 1.3), material(0xead9a5)));
   cabin.position.set(0, 1.75, 1.45);
   boat.add(cabin);
@@ -186,10 +204,19 @@ function createBoat() {
   wheel.position.set(0, 2.45, -.05);
   boat.add(wheel);
   boat.add(createMina());
+  const wakeMaterial = new THREE.MeshBasicMaterial({ color: 0xd9fbff, transparent: true, opacity: .08, depthWrite: false, side: THREE.DoubleSide });
+  [-.72, .72].forEach((x, index) => {
+    const wake = new THREE.Mesh(new THREE.PlaneGeometry(.42, 6.2), wakeMaterial);
+    wake.name = `boat-wake-${index}`;
+    wake.rotation.x = -Math.PI / 2;
+    wake.rotation.z = x < 0 ? -.1 : .1;
+    wake.position.set(x, -.12, 4.15);
+    boat.add(wake);
+  });
   const flag = shadow(new THREE.Mesh(new THREE.PlaneGeometry(1.35, .65), new THREE.MeshStandardMaterial({ color: 0xe2bc55, side: THREE.DoubleSide })));
   flag.position.set(.68, 7.9, -.55);
   boat.add(flag);
-  return { boat, sail };
+  return { boat, sail, wakeMaterial };
 }
 
 function createCloud(x: number, y: number, z: number, scale: number) {
@@ -273,6 +300,8 @@ export default function Sailing3DGame({ onClear }: Props) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
     renderer.domElement.setAttribute("aria-label", "立体のミナが船に乗って風待ち島を進む3Dゲーム画面");
     host.appendChild(renderer.domElement);
 
@@ -289,7 +318,7 @@ export default function Sailing3DGame({ onClear }: Props) {
 
     const oceanGeometry = new THREE.PlaneGeometry(52, 165, 42, 86);
     oceanGeometry.rotateX(-Math.PI / 2);
-    const ocean = new THREE.Mesh(oceanGeometry, new THREE.MeshStandardMaterial({ color: 0x267f99, roughness: .36, metalness: .08, transparent: true, opacity: .96, side: THREE.DoubleSide }));
+    const ocean = new THREE.Mesh(oceanGeometry, new THREE.MeshPhysicalMaterial({ color: 0x207c98, roughness: .27, metalness: .04, clearcoat: .72, clearcoatRoughness: .2, transparent: true, opacity: .97, side: THREE.DoubleSide }));
     ocean.position.set(0, 0, -54);
     ocean.receiveShadow = true;
     scene.add(ocean);
@@ -303,9 +332,14 @@ export default function Sailing3DGame({ onClear }: Props) {
       scene.add(object);
       return object;
     });
-    const { boat, sail } = createBoat();
+    const { boat, sail, wakeMaterial } = createBoat();
     boat.position.set(0, 0, 8);
     scene.add(boat);
+    const mina = boat.getObjectByName("3Dのミナ") as THREE.Group;
+    const minaArms = [mina.getObjectByName("mina-arm-left"), mina.getObjectByName("mina-arm-right")] as THREE.Object3D[];
+    const minaHands = [mina.getObjectByName("mina-hand-left"), mina.getObjectByName("mina-hand-right")] as THREE.Object3D[];
+    const armRest = minaArms.map((arm) => ({ position: arm.position.clone(), rotation: arm.rotation.clone() }));
+    const handRest = minaHands.map((hand) => hand.position.clone());
     scene.add(createCloud(-14, 13, -38, 1.5), createCloud(16, 11, -72, 1.15), createCloud(-11, 14, -105, 1.3));
 
     const passedGates = new Set<number>();
@@ -315,6 +349,7 @@ export default function Sailing3DGame({ onClear }: Props) {
     let elapsed = 0;
     let lastProgress = -1;
     let voyageFinished = false;
+    let celebrating = false;
 
     resetScene.current = () => {
       boat.position.set(0, 0, 8);
@@ -326,6 +361,13 @@ export default function Sailing3DGame({ onClear }: Props) {
       lastBoatZ = 8;
       lastProgress = -1;
       voyageFinished = false;
+      celebrating = false;
+      mina.position.y = .15;
+      minaArms.forEach((arm, index) => {
+        arm.position.copy(armRest[index].position);
+        arm.rotation.copy(armRest[index].rotation);
+      });
+      minaHands.forEach((hand, index) => hand.position.copy(handRest[index]));
     };
 
     const resize = () => {
@@ -369,6 +411,7 @@ export default function Sailing3DGame({ onClear }: Props) {
       if (normalFrame % 5 === 0) oceanGeometry.computeVertexNormals();
 
       sail.scale.x += ((sailingRef.current ? 1 : .08) - sail.scale.x) * Math.min(1, delta * 5);
+      wakeMaterial.opacity += (((sailingRef.current && !voyageFinished) ? .48 : .08) - wakeMaterial.opacity) * Math.min(1, delta * 4);
       if (!voyageFinished) {
         const sideSpeed = sailingRef.current ? 8.6 : 4.8;
         const nextX = clamp(boat.position.x + steering.current * delta * sideSpeed, -11, 11);
@@ -405,6 +448,25 @@ export default function Sailing3DGame({ onClear }: Props) {
       boat.rotation.z += ((-steering.current * .16) - boat.rotation.z) * Math.min(1, delta * 3.8);
       boat.rotation.y += ((-steering.current * .18) - boat.rotation.y) * Math.min(1, delta * 3.8);
       boat.rotation.x = Math.sin(elapsed * 1.5) * .025;
+      if (celebrating) {
+        const cheer = Math.abs(Math.sin(elapsed * 5.5));
+        const poseSpeed = Math.min(1, delta * 7);
+        mina.position.y = .15 + cheer * .22;
+        minaArms.forEach((arm, index) => {
+          const side = index === 0 ? -1 : 1;
+          arm.position.x += ((side * .45) - arm.position.x) * poseSpeed;
+          arm.position.y += ((3.48 + cheer * .08) - arm.position.y) * poseSpeed;
+          arm.position.z += (.18 - arm.position.z) * poseSpeed;
+          arm.rotation.z += ((side * -.12) - arm.rotation.z) * poseSpeed;
+          arm.rotation.x += (-.08 - arm.rotation.x) * poseSpeed;
+        });
+        minaHands.forEach((hand, index) => {
+          const side = index === 0 ? -1 : 1;
+          hand.position.x += ((side * .47) - hand.position.x) * poseSpeed;
+          hand.position.y += ((4.22 + cheer * .12) - hand.position.y) * poseSpeed;
+          hand.position.z += (.16 - hand.position.z) * poseSpeed;
+        });
+      }
       camera.position.x += ((boat.position.x + 7) - camera.position.x) * Math.min(1, delta * 2.3);
       camera.position.z += ((boat.position.z + 16) - camera.position.z) * Math.min(1, delta * 2.3);
       camera.lookAt(boat.position.x, 2.1, boat.position.z - 7.5);
@@ -421,8 +483,9 @@ export default function Sailing3DGame({ onClear }: Props) {
         setSailing(false);
         setFinished(true);
         const cleared = passedGates.size === GATES.length;
+        celebrating = cleared;
         setComplete(cleared);
-        setMessage(cleared ? "ミナと船が五つの風門を抜け、風待ち島の航路を走りきりました。" : "港へ戻りました。見失った風門へ、もう一度出航できます。");
+        setMessage(cleared ? "五つの風門を走破。ミナが島へ向かってバンザイしています！" : "港へ戻りました。見失った風門へ、もう一度出航できます。");
         if (cleared && !rewarded.current) {
           rewarded.current = true;
           onClearRef.current();

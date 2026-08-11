@@ -39,7 +39,7 @@ const games = [
   { id: "clockwork", icon: "🕰️", title: "ミナと消えた時間", description: "時計仕掛けの村を歩き、消えた時間のかけらを3つ見つけます。", tag: "立体風探索 · PROTOTYPE" },
   { id: "sailing", icon: "⛵", title: "ミナと風待ち島", description: "帆を開いて五つの風門をくぐり、小さな島のそばを航海します。", tag: "セーリング · ONE ISLAND" },
   { id: "sailing3d", icon: "🌊", title: "ミナと風待ち島 3D", description: "立体のミナが船に乗り、波と光の海で風門を目指す本格3D実験版です。", tag: "REAL 3D · WEBGL" },
-  { id: "sailingm1", icon: "☀️", title: "ミナと風待ち島 M1", description: "M1以降のiPadへ向け、海・空・光・波しぶきを最高品質で描く特別航路です。", tag: "M1 HIGH QUALITY · 7 GATES" },
+  { id: "sailingm1", icon: "✉️", title: "ミナと風待ち島 M1・朝の手紙", description: "三つの風を集め、岩礁を避け、島の桟橋へ朝の手紙を届けるM1向け航海ゲームです。", tag: "M1 MISSION · MORNING LETTER" },
 ] as const;
 
 const restingGames = [
@@ -180,7 +180,7 @@ export default function GameHub() {
       {mode === "clockwork" && <ClockworkGame onBack={() => openGame("home")} onClear={() => reward("clockwork", 3)} />}
       {mode === "sailing" && <SailingGame onBack={() => openGame("home")} onClear={() => reward("sailing", 4)} />}
       {mode === "sailing3d" && <GameFrame title="ミナと風待ち島 3D" kicker="07 · REAL-TIME 3D SAILING" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">3Dの海を準備しています…</div>}><Sailing3DGame onClear={() => reward("sailing3d", 5)} /></Suspense></GameFrame>}
-      {mode === "sailingm1" && <GameFrame title="ミナと風待ち島 M1" kicker="08 · M1 HIGH QUALITY OCEAN" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">最高品質の海を準備しています…</div>}><SailingM1Game onClear={() => reward("sailingm1", 8)} /></Suspense></GameFrame>}
+      {mode === "sailingm1" && <GameFrame title="ミナと風待ち島 M1・朝の手紙" kicker="08 · MISSION 01 · MORNING LETTER" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">朝の航路を準備しています…</div>}><SailingM1Game onClear={() => reward("sailingm1", 8)} /></Suspense></GameFrame>}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>

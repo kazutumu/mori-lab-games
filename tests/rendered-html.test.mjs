@@ -24,12 +24,13 @@ test("renders the Mori Lab game collection", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 
   const source = await readFile(new URL("../app/GameHub.tsx", import.meta.url), "utf8");
-  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");
   const sailingm1 = await readFile(new URL("../app/SailingM1Game.tsx", import.meta.url), "utf8");
   const brawler2d = await readFile(new URL("../app/Brawler2DGame.tsx", import.meta.url), "utf8");
-  const minaSprites = await stat(new URL("../public/game-assets/brawler-2d/mina-sprites-v1.png", import.meta.url));
-  const guardianSprites = await stat(new URL("../public/game-assets/brawler-2d/guardians-sprites-v1.png", import.meta.url));
+  const individualSprites = await Promise.all([
+    ...Array.from({length:6},(_,index)=>stat(new URL(`../public/game-assets/brawler-2d/mina-${index}-v2.png`,import.meta.url))),
+    ...Array.from({length:4},(_,index)=>stat(new URL(`../public/game-assets/brawler-2d/guardian-${index}-v2.png`,import.meta.url))),
+  ]);
   assert.match(source, /ミナと気配の森/);
   assert.match(source, /昼の星への道/);
   assert.match(source, /森研究所を育てよう/);
@@ -87,13 +88,13 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(source, /lazy\(\(\) => import\("\.\/Brawler2DGame"\)\)/);
   assert.match(source, /ILLUSTRATED 2D/);
   assert.match(brawler2d, /WORLD_WIDTH=2600/);
-  assert.match(styles, /mina-sprites-v1\.png/);
-  assert.match(styles, /guardians-sprites-v1\.png/);
+  assert.match(brawler2d, /mina-\$\{view\.frame\}-v2\.png/);
+  assert.match(brawler2d, /guardian-\$\{enemy\.id\}-v2\.png/);
   assert.match(brawler2d, /三段攻撃/);
   assert.match(brawler2d, /setPointerCapture/);
   assert.doesNotMatch(brawler2d, /WebGLRenderer|GLTFLoader/);
-  assert.ok(minaSprites.size > 500_000 && minaSprites.size < 3_000_000);
-  assert.ok(guardianSprites.size > 500_000 && guardianSprites.size < 3_000_000);
+  assert.equal(individualSprites.length,10);
+  assert.ok(individualSprites.every(sprite=>sprite.size>100_000&&sprite.size<500_000));
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

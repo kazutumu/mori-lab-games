@@ -4,6 +4,9 @@
 
 - `public/game-assets/brawler-2d/mina-sprites-v1.png`：ミナ6動作の背景透過スプライト
 - `public/game-assets/brawler-2d/guardians-sprites-v1.png`：四人の番人の背景透過スプライト
+- `public/game-assets/brawler-2d/mina-0-v2.png`〜`mina-5-v2.png`：輪郭ごとに分離したミナの個別スプライト
+- `public/game-assets/brawler-2d/guardian-0-v2.png`〜`guardian-3-v2.png`：輪郭ごとに分離した番人の個別スプライト
+- `extract_individual_sprites.py`：隣接ポーズの手足が表示されないよう、元シートから人物単位で抽出する再生成スクリプト
 
 ## 生成元
 

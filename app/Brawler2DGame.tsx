@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import Image from "next/image";
 
 type Props={onClear:()=>void};
 type Direction="left"|"right";
@@ -12,8 +13,6 @@ const WORLD_WIDTH=2600;
 const enemySeeds=[{id:0,x:520,health:90},{id:1,x:1040,health:105},{id:2,x:1580,health:130},{id:3,x:2150,health:175}];
 const freshEnemies=():EnemyRuntime[]=>enemySeeds.map(item=>({...item,maxHealth:item.health,active:true,cooldown:0,hitUntil:0,attackingUntil:0}));
 const clamp=(value:number,min:number,max:number)=>Math.min(max,Math.max(min,value));
-const minaFramePosition=(frame:number)=>`${frame*20}% center`;
-const guardianPosition=(id:number)=>`${id*(100/3)}% center`;
 
 export default function Brawler2DGame({onClear}:Props){
   const stageRef=useRef<HTMLDivElement>(null),onClearRef=useRef(onClear),resetScene=useRef<()=>void>(()=>undefined),attackRequest=useRef(false),input=useRef({left:false,right:false});
@@ -39,8 +38,8 @@ export default function Brawler2DGame({onClear}:Props){
     <div className="side-sky"><i/><i/><i/></div><div className="side-moon"/>
     <div className="side-hills far" style={{transform:`translateX(${-view.cameraX*.12}px)`}}/><div className="side-hills near" style={{transform:`translateX(${-view.cameraX*.28}px)`}}/>
     <div className="side-world" style={{width:`${WORLD_WIDTH}px`,transform:`translateX(${-view.cameraX}px)`}}><div className="side-road"/>{Array.from({length:18},(_,i)=><div className="side-tree" key={i} style={{left:`${i*155-20}px`,transform:`scale(${.78+(i%4)*.07})`}}><i/><b/></div>)}{Array.from({length:9},(_,i)=><div className="side-lantern" key={`l${i}`} style={{left:`${230+i*285}px`}}><i/></div>)}<div className={view.gateOpen?"side-gate open":"side-gate"}><i/><b/><span>森研究所</span></div>
-      {view.enemies.map(enemy=>enemy.active&&<div className={`guardian-sprite ${enemy.hit?"hit ":""}${enemy.attacking?"attacking ":""}${enemy.facingLeft?"face-left":"face-right"}`} key={enemy.id} style={{left:`${enemy.x}px`,backgroundPosition:guardianPosition(enemy.id)}}><div className="guardian-health"><i style={{width:`${Math.max(0,enemy.health/enemy.maxHealth*100)}%`}}/></div></div>)}
-      <div className={`mina-2d-sprite ${view.facing==="left"?"face-left":"face-right"} ${view.hit?"hit":""}`} style={{left:`${view.playerX}px`,backgroundPosition:minaFramePosition(view.frame)}}/>
+      {view.enemies.map(enemy=>enemy.active&&<div className={`guardian-sprite ${enemy.hit?"hit ":""}${enemy.attacking?"attacking ":""}${enemy.facingLeft?"face-left":"face-right"}`} key={enemy.id} style={{left:`${enemy.x}px`}}><Image src={`/game-assets/brawler-2d/guardian-${enemy.id}-v2.png`} alt="" width={473} height={768} unoptimized draggable={false}/><div className="guardian-health"><i style={{width:`${Math.max(0,enemy.health/enemy.maxHealth*100)}%`}}/></div></div>)}
+      <div className={`mina-2d-sprite ${view.facing==="left"?"face-left":"face-right"} ${view.hit?"hit":""}`} style={{left:`${view.playerX}px`}}><Image src={`/game-assets/brawler-2d/mina-${view.frame}-v2.png`} alt="" width={413} height={683} unoptimized draggable={false}/></div>
       <div className="side-finish"/>
     </div>
     <div className="side-hud"><div><small>MINA</small><div className="side-health"><i style={{width:`${view.health}%`}}/></div><strong>{view.health}</strong></div><div><small>ROAD</small><strong>{progress}<i>%</i></strong></div><div><small>GUARDIANS</small><strong>{view.enemies.filter(enemy=>enemy.active).length}<i> / 4</i></strong></div><div><small>SCORE</small><strong>{view.score}</strong></div></div>

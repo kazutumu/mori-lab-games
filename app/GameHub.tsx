@@ -6,8 +6,9 @@ const Sailing3DGame = lazy(() => import("./Sailing3DGame"));
 const SailingM1Game = lazy(() => import("./SailingM1Game"));
 const Brawler2DGame = lazy(() => import("./Brawler2DGame"));
 const MinaRPGGame = lazy(() => import("./MinaRPGGame"));
+const MinaPixelRPGGame = lazy(() => import("./MinaPixelRPGGame"));
 
-type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d" | "sailingm1" | "brawler2d" | "rpg3d";
+type Mode = "home" | "explore" | "novel" | "idle" | "chotto" | "chair" | "quiz" | "clockwork" | "sailing" | "sailing3d" | "sailingm1" | "brawler2d" | "rpg3d" | "rpg2d";
 
 type SaveData = {
   clears: string[];
@@ -44,6 +45,7 @@ const games = [
   { id: "sailingm1", icon: "✉️", title: "ミナと風待ち島 M1・朝の手紙", description: "三つの風を集め、岩礁を避け、島の桟橋へ朝の手紙を届けるM1向け航海ゲームです。", tag: "M1 MISSION · MORNING LETTER" },
   { id: "brawler2d", icon: "🥊", title: "ミナと夜の研究路", description: "表紙基準のミナと四人の番人が登場する、完全横スクロールのリアル2Dアクションです。", tag: "ILLUSTRATED 2D · SIDE-SCROLL" },
   { id: "rpg3d", icon: "🗝️", title: "ミナと森研究所 第一章・消えた記録", description: "村と森を歩き、記録片を集め、森研究所の扉をひらくM1 iPad基準の小規模3D RPGです。", tag: "M1 3D RPG · CHAPTER 01" },
+  { id: "rpg2d", icon: "🧭", title: "ミナと星苔の方位盤 第一章・北をなくした森", description: "灯枝村から星苔林道、森研究所地下へ。方角を取り戻す完全オリジナル見下ろし型2D JRPGです。", tag: "M1 PIXEL JRPG · CHAPTER 01" },
 ] as const;
 
 const restingGames = [
@@ -187,6 +189,7 @@ export default function GameHub() {
       {mode === "sailingm1" && <GameFrame title="ミナと風待ち島 M1・朝の手紙" kicker="08 · MISSION 01 · MORNING LETTER" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">朝の航路を準備しています…</div>}><SailingM1Game onClear={() => reward("sailingm1", 8)} /></Suspense></GameFrame>}
       {mode === "brawler2d" && <GameFrame title="ミナと夜の研究路" kicker="09 · MISSION 02 · ILLUSTRATED 2D SIDE-SCROLL" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">夜の研究路を準備しています…</div>}><Brawler2DGame onClear={() => reward("brawler2d", 8)} /></Suspense></GameFrame>}
       {mode === "rpg3d" && <GameFrame title="ミナと森研究所 第一章・消えた記録" kicker="10 · M1 3D RPG · CHAPTER 01" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">村と森研究所を準備しています…</div>}><MinaRPGGame onClear={() => reward("rpg3d", 12)} /></Suspense></GameFrame>}
+      {mode === "rpg2d" && <GameFrame title="ミナと星苔の方位盤 第一章・北をなくした森" kicker="11 · M1 PIXEL JRPG · CHAPTER 01" onBack={() => openGame("home")}><Suspense fallback={<div className="three-loading">灯枝村と星苔林道を準備しています…</div>}><MinaPixelRPGGame onClear={() => reward("rpg2d", 14)} /></Suspense></GameFrame>}
 
       <footer>気づきは残す。大きい作業は明日でもよい。<span>森研究所 🌲</span></footer>
     </main>
@@ -202,7 +205,7 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
         <div className="eyebrow"><span /> MORI LABORATORY · GAME ARCHIVE 02</div>
         <h1>遊んだぶんだけ、<br /><em>一本の木</em>が育ちます。</h1>
         <p>ミナと森を歩く。船で島のそばを航海する。小さなクリアが、いつか森研究所になります。</p>
-        <div className="hero-meta"><span>10の育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
+        <div className="hero-meta"><span>11の育成ゲーム</span><span>端末内セーブ</span><span>Mac / iPhone / iPad</span></div>
       </div>
 
       <div className="growth-scene">
@@ -217,7 +220,7 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
           const cleared = save.clears.some((id) => id === game.id || id.startsWith(`${game.id}-`) || (game.id === "idle" && id === "idle-goal"));
           return (
             <button className="game-card" data-game-id={game.id} key={game.id} onClick={() => openGame(game.id)}>
-              <span className="card-number">0{index + 1}</span>
+              <span className="card-number">{String(index + 1).padStart(2, "0")}</span>
               <span className="card-icon">{game.icon}</span>
               <span className="card-copy"><small>{game.tag}</small><strong>{game.title}</strong><p>{game.description}</p></span>
               <span className={cleared ? "card-state cleared" : "card-state"}>{cleared ? "観察済み ✓" : "入口をひらく →"}</span>

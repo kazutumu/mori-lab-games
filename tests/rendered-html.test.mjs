@@ -28,11 +28,57 @@ test("renders the Mori Lab game collection", async () => {
   const sailingm1 = await readFile(new URL("../app/SailingM1Game.tsx", import.meta.url), "utf8");
   const brawler2d = await readFile(new URL("../app/Brawler2DGame.tsx", import.meta.url), "utf8");
   const rpg3d = await readFile(new URL("../app/MinaRPGGame.tsx", import.meta.url), "utf8");
+  const rpg2d = await readFile(new URL("../app/MinaPixelRPGGame.tsx", import.meta.url), "utf8");
   const rpgSocialCard = await stat(new URL("../public/og-rpg-v1.png", import.meta.url));
+  const rpg2dSocialCard = await stat(new URL("../public/og-rpg2d-v1.png", import.meta.url));
   const individualSprites = await Promise.all([
     ...Array.from({length:6},(_,index)=>stat(new URL(`../public/game-assets/brawler-2d/mina-${index}-v2.png`,import.meta.url))),
     ...Array.from({length:4},(_,index)=>stat(new URL(`../public/game-assets/brawler-2d/guardian-${index}-v2.png`,import.meta.url))),
   ]);
+  const rpg2dAssetNames = [
+    "enemy-garasu-ga-v1.png",
+    "enemy-ori-kemono-v1.png",
+    "enemy-sumi-mori-v1.png",
+    "enemy-toge-tsugumi-v1.png",
+    "enemy-yohaku-kurai-v1.png",
+    "mina-down-v1.png",
+    "mina-left-v1.png",
+    "mina-right-v1.png",
+    "mina-up-v1.png",
+    "npc-fuka-v1.png",
+    "npc-keeper-v1.png",
+    "npc-merchant-v1.png",
+    "npc-nagi-v1.png",
+    "prop-bed-v1.png",
+    "prop-bookshelf-v1.png",
+    "prop-bridge-v1.png",
+    "prop-broadleaf-v1.png",
+    "prop-chest-v1.png",
+    "prop-cottage-v1.png",
+    "prop-evergreen-v1.png",
+    "prop-laboratory-v1.png",
+    "prop-lantern-v1.png",
+    "prop-research-desk-v1.png",
+    "prop-save-monument-v1.png",
+    "prop-signpost-v1.png",
+    "tile-bush-v1.png",
+    "tile-cliff-v1.png",
+    "tile-flower-grass-v1.png",
+    "tile-forest-canopy-v1.png",
+    "tile-forest-floor-v1.png",
+    "tile-grass-v1.png",
+    "tile-lab-floor-v1.png",
+    "tile-path-v1.png",
+    "tile-plaster-wall-v1.png",
+    "tile-slate-roof-v1.png",
+    "tile-standing-stone-v1.png",
+    "tile-stone-floor-v1.png",
+    "tile-stone-stairs-v1.png",
+    "tile-water-v1.png",
+    "tile-wood-door-v1.png",
+    "tile-wood-floor-v1.png",
+  ];
+  const rpg2dAssets = await Promise.all(rpg2dAssetNames.map((name) => stat(new URL(`../public/game-assets/rpg2d-ch1/${name}`, import.meta.url))));
   assert.match(source, /ミナと気配の森/);
   assert.match(source, /昼の星への道/);
   assert.match(source, /森研究所を育てよう/);
@@ -116,6 +162,43 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(rpg3d, /renderer\.dispose/);
   assert.match(rpg3d, /devicePixelRatio \|\| 1, 2/);
   assert.ok(rpgSocialCard.size>1_000_000&&rpgSocialCard.size<4_000_000);
+  const gamesBlock = source.match(/const games = \[([\s\S]*?)\] as const;/);
+  assert.ok(gamesBlock, "game entrance list must remain statically inspectable");
+  const gameIds = [...gamesBlock[1].matchAll(/id:\s*"([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(gameIds.length, 11);
+  assert.equal(gameIds.at(-1), "rpg2d");
+  assert.match(source, /lazy\(\(\) => import\("\.\/MinaPixelRPGGame"\)\)/);
+  assert.match(source, /type Mode = [^;]*"rpg2d"/);
+  assert.match(source, /mode === "rpg2d"/);
+  assert.match(source, /ミナと星苔の方位盤 第一章・北をなくした森/);
+  assert.match(source, /11 · M1 PIXEL JRPG · CHAPTER 01/);
+  assert.match(source, /reward\("rpg2d", 14\)/);
+  assert.match(source, /11の育成ゲーム/);
+  assert.match(rpg2d, /mori-lab-jrpg-ch1-v1/);
+  assert.match(rpg2d, /getContext\("2d"/);
+  assert.match(rpg2d, /imageSmoothingEnabled = false/);
+  assert.match(rpg2d, /灯枝村/);
+  assert.match(rpg2d, /星苔林道/);
+  assert.match(rpg2d, /森研究所・方位観測室/);
+  assert.match(rpg2d, /showDialogue/);
+  assert.match(rpg2d, /宝箱/);
+  assert.match(rpg2d, /equipment/);
+  assert.match(rpg2d, /装備/);
+  assert.match(rpg2d, /xpForLevel/);
+  assert.match(rpg2d, /レベル/);
+  assert.match(rpg2d, /battleCommand/);
+  assert.match(rpg2d, /コマンド式ターン戦闘/);
+  assert.match(rpg2d, /北喰みヨハク/);
+  assert.match(rpg2d, /第1章クリア/);
+  assert.match(rpg2d, /setPointerCapture/);
+  assert.match(rpg2d, /onPointerUp/);
+  assert.match(rpg2d, /onPointerCancel/);
+  assert.match(rpg2d, /onLostPointerCapture/);
+  assert.doesNotMatch(rpg2d, /(?:from\s+["']three["']|\bTHREE\b|WebGLRenderer|WebGLRenderingContext)/);
+  assert.equal(rpg2dAssetNames.length, 41);
+  assert.equal(rpg2dAssets.length, 41);
+  assert.ok(rpg2dAssets.every((asset) => asset.isFile() && asset.size > 3_000 && asset.size < 200_000));
+  assert.ok(rpg2dSocialCard.isFile() && rpg2dSocialCard.size > 1_000_000 && rpg2dSocialCard.size < 4_000_000);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /treePoints/);
   assert.match(source, /pixel-tree/);

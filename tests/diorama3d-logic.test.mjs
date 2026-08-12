@@ -123,6 +123,275 @@ test("places every room exit on its zone boundary within the doorway interaction
   }
 });
 
+test("describes all four entrances with stable names, coordinates, and source and destination zones", () => {
+  const zones = new Map(game.createDioramaMapPlan().map((zone) => [zone.id, zone]));
+  const entrances = game.createDioramaPortalPlan().filter((portal) => portal.entranceKind);
+  const expected = [
+    {
+      id: "shop-in", entranceKind: "shop", entranceName: "サナの織り店",
+      x: -8, z: 26.8, toX: -43, toZ: 32, sourceZone: "village", destinationZone: "shop", requires: null,
+    },
+    {
+      id: "inn-in", entranceKind: "inn", entranceName: "風待ち宿",
+      x: 8, z: 26.8, toX: -43, toZ: 15, sourceZone: "village", destinationZone: "inn", requires: null,
+    },
+    {
+      id: "annex-in", entranceKind: "annex", entranceName: "森研究所・風向分室",
+      x: -6, z: -9.3, toX: 41, toZ: 26, sourceZone: "hill", destinationZone: "annex", requires: null,
+    },
+    {
+      id: "cellar-in", entranceKind: "cellar", entranceName: "地下機関層",
+      x: 6, z: -9.3, toX: 41, toZ: 1, sourceZone: "hill", destinationZone: "cellar", requires: "sui",
+    },
+  ];
+
+  assert.equal(new Set(entrances.map((portal) => portal.entranceKind)).size, expected.length);
+  assert.deepEqual(entrances.map((portal) => ({
+    id: portal.id,
+    entranceKind: portal.entranceKind,
+    entranceName: portal.entranceName,
+    x: portal.x,
+    z: portal.z,
+    toX: portal.toX,
+    toZ: portal.toZ,
+    sourceZone: game.dioramaZoneAt(portal.x, portal.z),
+    destinationZone: game.dioramaZoneAt(portal.toX, portal.toZ),
+    requires: portal.requires ?? null,
+  })), expected);
+
+  for (const portal of entrances) {
+    const destination = zones.get(portal.entranceKind);
+    assert.ok(destination, `${portal.id} must target a declared zone`);
+    assert.deepEqual({ x: portal.toX, z: portal.toZ }, destination.spawn, `${portal.id} must arrive at its safe spawn`);
+    assert.ok(
+      game.createDioramaPortalPlan().some((candidate) => candidate.id === `${portal.entranceKind}-out` && candidate.exit),
+      `${portal.id} must have a paired exit`,
+    );
+  }
+});
+
+test("guides every objective stage through the intended entrance, preparation, and boss sequence", () => {
+  const fresh = game.freshMinaDioramaSave();
+  const stitches = ["stitch-dawn", "stitch-cloud", "stitch-bell"];
+  const investigation = {
+    ...fresh,
+    progress: 3,
+    stitches,
+    recruited: ["towa", "sui"],
+    chests: ["annex-archive"],
+  };
+  const cases = [
+    { label: "intro", save: fresh, position: { x: 0, z: 32 }, expected: { name: "イオ主任", x: 2.7, z: 34 } },
+    {
+      label: "first stitch",
+      save: { ...fresh, progress: 1, recruited: ["towa"] },
+      position: { x: 0, z: 15 },
+      expected: { name: "朝色の風綴り", x: -6.5, z: 10 },
+    },
+    {
+      label: "second stitch",
+      save: { ...fresh, progress: 1, recruited: ["towa"], stitches: ["stitch-dawn"] },
+      position: { x: 0, z: 15 },
+      expected: { name: "雲色の風綴り", x: 6.8, z: 1 },
+    },
+    {
+      label: "third stitch",
+      save: { ...fresh, progress: 1, recruited: ["towa"], stitches: ["stitch-dawn", "stitch-cloud"] },
+      position: { x: 0, z: 15 },
+      expected: { name: "鈴色の風綴り", x: -2.2, z: -8.5 },
+    },
+    {
+      label: "annex entrance",
+      save: { ...fresh, progress: 2, recruited: ["towa"], stitches },
+      position: { x: 0, z: 15 },
+      expected: { name: "森研究所・風向分室", x: -6, z: -9.3 },
+    },
+    {
+      label: "Sui inside annex",
+      save: { ...fresh, progress: 2, recruited: ["towa"], stitches },
+      position: { x: 41, z: 26 },
+      expected: { name: "スイ", x: 38, z: 19 },
+    },
+    {
+      label: "archive inside annex",
+      save: { ...fresh, progress: 3, recruited: ["towa", "sui"], stitches },
+      position: { x: 41, z: 26 },
+      expected: { name: "分室の保管箱", x: 47, z: 23 },
+    },
+    {
+      label: "preparations 0 of 3",
+      save: { ...investigation, preparations: [] },
+      position: { x: -6, z: -8.5 },
+      expected: { name: "眠る風車・地下入口", x: 6, z: -9.3 },
+    },
+    {
+      label: "preparations 1 of 3",
+      save: { ...investigation, preparations: ["towa_repair"] },
+      position: { x: -6, z: -8.5 },
+      expected: { name: "眠る風車・地下入口", x: 6, z: -9.3 },
+    },
+    {
+      label: "preparations 2 of 3",
+      save: { ...investigation, preparations: ["towa_repair", "sui_tuning"] },
+      position: { x: -6, z: -8.5 },
+      expected: { name: "風鳥の古い巣", x: 9, z: -9.2 },
+    },
+    {
+      label: "preparations 3 of 3 from hill",
+      save: { ...investigation, preparations: ["towa_repair", "sui_tuning", "mina_nest_seen"] },
+      position: { x: -6, z: -8.5 },
+      expected: { name: "地下機関層", x: 6, z: -9.3 },
+    },
+    {
+      label: "boss inside cellar",
+      save: { ...investigation, preparations: ["towa_repair", "sui_tuning", "mina_nest_seen"] },
+      position: { x: 41, z: 1 },
+      expected: { name: "眠り角ムルム", x: 41, z: -10 },
+    },
+    {
+      label: "report after boss",
+      save: {
+        ...investigation,
+        preparations: ["towa_repair", "sui_tuning", "mina_nest_seen"],
+        bossDefeated: true,
+      },
+      position: { x: 0, z: 32 },
+      expected: { name: "イオ主任", x: 2.7, z: 34 },
+    },
+    {
+      label: "free observation after completion",
+      save: { ...investigation, completed: true },
+      position: { x: 0, z: 15 },
+      expected: { name: "風鈴丘", x: 0, z: 0 },
+    },
+  ];
+
+  for (const entry of cases) {
+    const guide = game.dioramaNextDestination(entry.save, entry.position);
+    assert.deepEqual(
+      { name: guide.name, x: guide.x, z: guide.z },
+      entry.expected,
+      `${entry.label} must identify the intended next place`,
+    );
+  }
+
+  const undergroundFromAnnexLanding = game.dioramaNextDestination(
+    { ...investigation, preparations: [] },
+    { x: -6, z: -8.5 },
+  );
+  assert.deepEqual(undergroundFromAnnexLanding, {
+    name: "眠る風車・地下入口",
+    x: 6,
+    z: -9.3,
+    direction: "東",
+    arrow: "→",
+    distance: 12,
+  });
+});
+
+test("routes every room through its own exit before pointing across disconnected zones", () => {
+  const save = game.freshMinaDioramaSave();
+  const zones = new Map(game.createDioramaMapPlan().map((zone) => [zone.id, zone]));
+  const exits = game.createDioramaPortalPlan().filter((portal) => portal.exit);
+
+  for (const portal of exits) {
+    const zoneId = portal.id.replace("-out", "");
+    const zone = zones.get(zoneId);
+    assert.ok(zone, `${portal.id} must belong to a room zone`);
+    const guide = game.dioramaNextDestination(save, zone.spawn);
+    assert.deepEqual(guide, {
+      name: portal.label,
+      x: portal.x,
+      z: portal.z,
+      direction: "南",
+      arrow: "↓",
+      distance: 3,
+    }, `${zoneId} guidance must use its exit as the next route step`);
+
+    const continued = game.dioramaNextDestination(save, { x: portal.toX, z: portal.toZ });
+    assert.notEqual(continued.name, portal.label, `${portal.id} must not create an exit routing loop after teleport`);
+  }
+});
+
+test("reports all eight compass directions, arrows, and rounded distances", () => {
+  const save = game.freshMinaDioramaSave();
+  const target = { name: "イオ主任", x: 2.7, z: 34 };
+  const cases = [
+    { direction: "北", arrow: "↑", position: { x: 2.7, z: 35 }, distance: 1 },
+    { direction: "北東", arrow: "↗", position: { x: 1.7, z: 35 }, distance: 1 },
+    { direction: "東", arrow: "→", position: { x: 1.7, z: 34 }, distance: 1 },
+    { direction: "南東", arrow: "↘", position: { x: 1.7, z: 33 }, distance: 1 },
+    { direction: "南", arrow: "↓", position: { x: 2.7, z: 33 }, distance: 1 },
+    { direction: "南西", arrow: "↙", position: { x: 3.7, z: 33 }, distance: 1 },
+    { direction: "西", arrow: "←", position: { x: 3.7, z: 34 }, distance: 1 },
+    { direction: "北西", arrow: "↖", position: { x: 3.7, z: 35 }, distance: 1 },
+    { direction: "ここ", arrow: "●", position: { x: 2.7, z: 34 }, distance: 0 },
+  ];
+
+  for (const entry of cases) {
+    assert.deepEqual(game.dioramaNextDestination(save, entry.position), {
+      ...target,
+      direction: entry.direction,
+      arrow: entry.arrow,
+      distance: entry.distance,
+    });
+  }
+
+  assert.deepEqual(game.dioramaNextDestination(save, { x: -.3, z: 30 }), {
+    ...target,
+    direction: "南東",
+    arrow: "↘",
+    distance: 5,
+  }, "a 3-4-5 displacement must report five rounded steps");
+  assert.equal(game.dioramaNextDestination(save, { x: 2.21, z: 34 }).direction, "ここ");
+  assert.equal(game.dioramaNextDestination(save, { x: 2.2, z: 34 }).direction, "東");
+});
+
+test("derives destination guidance without changing the version-one save schema or data", () => {
+  const legacyV1 = {
+    version: 1,
+    position: { x: 41, z: 26 },
+    yaw: .75,
+    hp: 100,
+    sp: 30,
+    level: 3,
+    xp: 120,
+    gold: 84,
+    items: { herb: 5, dew: 2, wakeLeaf: 1, returnRibbon: 0 },
+    equipment: { weapon: "風綴りの杖", armor: "丘守りの外套", charm: "なし" },
+    chests: ["hill-west"],
+    stitches: ["stitch-dawn", "stitch-cloud", "stitch-bell"],
+    defeated: ["fluff-a"],
+    talked: ["io", "towa", "sui"],
+    recruited: ["towa", "sui"],
+    progress: 3,
+    story: "sui_joined",
+    preparations: [],
+    bossDefeated: false,
+    completed: false,
+    playSeconds: 1234,
+    savePoint: "annex",
+  };
+  const restored = game.validateMinaDioramaSave(structuredClone(legacyV1));
+  const beforeGuide = structuredClone(restored);
+  const guide = game.dioramaNextDestination(restored);
+
+  assert.equal(restored.version, 1);
+  assert.deepEqual(restored, legacyV1);
+  assert.deepEqual(Object.keys(restored).sort(), Object.keys(legacyV1).sort());
+  assert.deepEqual(guide, {
+    name: "分室の保管箱",
+    x: 47,
+    z: 23,
+    direction: "北東",
+    arrow: "↗",
+    distance: 7,
+  });
+  assert.deepEqual(restored, beforeGuide, "guide derivation must not mutate a restored v1 save");
+  assert.equal("nextDestination" in restored, false, "derived HUD guidance must not enter the persisted schema");
+  assert.deepEqual(game.validateMinaDioramaSave(JSON.parse(JSON.stringify(restored))), legacyV1);
+});
+
 test("save validation rejects unknown values and clamps every bounded field", () => {
   const fresh = game.freshMinaDioramaSave();
   const restored = game.validateMinaDioramaSave({

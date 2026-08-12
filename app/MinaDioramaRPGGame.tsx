@@ -69,6 +69,7 @@ type Hud = {
   xp: number;
   gold: number;
   objective: string;
+  nextDestination: DioramaDestinationGuide;
   stitches: number;
   party: string[];
   equipment: Equipment;
@@ -140,6 +141,17 @@ type RuntimePortal = {
   toZ: number;
   requires?: "stitches" | "sui";
   exit?: boolean;
+  entranceKind?: "shop" | "inn" | "annex" | "cellar";
+  entranceName?: string;
+};
+
+export type DioramaDestinationGuide = {
+  name: string;
+  x: number;
+  z: number;
+  direction: "北" | "北東" | "東" | "南東" | "南" | "南西" | "西" | "北西" | "ここ";
+  arrow: "↑" | "↗" | "→" | "↘" | "↓" | "↙" | "←" | "↖" | "●";
+  distance: number;
 };
 
 type BattleRuntime = {
@@ -330,15 +342,68 @@ export function dioramaRoomExitAt(x: number, z: number) {
 
 export function createDioramaPortalPlan(): RuntimePortal[] {
   return [
-    { id: "shop-in", label: "サナの織り店に入る", x: -8, z: 26.8, toX: -43, toZ: 32 },
+    { id: "shop-in", label: "サナの織り店に入る", x: -8, z: 26.8, toX: -43, toZ: 32, entranceKind: "shop", entranceName: "サナの織り店" },
     { id: "shop-out", label: "風綴り村へ出る", x: -43, z: 35, toX: -8, toZ: 25.8, exit: true },
-    { id: "inn-in", label: "風待ち宿に入る", x: 8, z: 26.8, toX: -43, toZ: 15 },
+    { id: "inn-in", label: "風待ち宿に入る", x: 8, z: 26.8, toX: -43, toZ: 15, entranceKind: "inn", entranceName: "風待ち宿" },
     { id: "inn-out", label: "風綴り村へ出る", x: -43, z: 18, toX: 8, toZ: 25.8, exit: true },
-    { id: "annex-in", label: "森研究所・風向分室に入る", x: -6, z: -9.3, toX: 41, toZ: 26 },
+    { id: "annex-in", label: "森研究所・風向分室に入る", x: -6, z: -9.3, toX: 41, toZ: 26, entranceKind: "annex", entranceName: "森研究所・風向分室" },
     { id: "annex-out", label: "風鈴丘へ出る", x: 41, z: 29, toX: -6, toZ: -8.5, exit: true },
-    { id: "cellar-in", label: "眠る風車の地下へ降りる", x: 6, z: -9.3, toX: 41, toZ: 1, requires: "sui" },
+    { id: "cellar-in", label: "眠る風車の地下へ降りる", x: 6, z: -9.3, toX: 41, toZ: 1, requires: "sui", entranceKind: "cellar", entranceName: "地下機関層" },
     { id: "cellar-out", label: "風鈴丘へ戻る", x: 41, z: 4, toX: 6, toZ: -8.5, exit: true },
   ];
+}
+
+const directionFromDelta = (dx: number, dz: number): DioramaDestinationGuide["direction"] => {
+  if (Math.hypot(dx, dz) < .5) return "ここ";
+  const directions: DioramaDestinationGuide["direction"][] = ["東", "南東", "南", "南西", "西", "北西", "北", "北東"];
+  const octant = Math.round(Math.atan2(dz, dx) / (Math.PI / 4));
+  return directions[(octant + 8) % 8];
+};
+
+const DIRECTION_ARROWS: Record<DioramaDestinationGuide["direction"], DioramaDestinationGuide["arrow"]> = {
+  北: "↑", 北東: "↗", 東: "→", 南東: "↘", 南: "↓", 南西: "↙", 西: "←", 北西: "↖", ここ: "●",
+};
+
+export function dioramaNextDestination(save: MinaDioramaChapterSave, position = save.position): DioramaDestinationGuide {
+  const currentZone = dioramaZoneAt(position.x, position.z);
+  const portals = createDioramaPortalPlan();
+  const exit = portals.find((portal) => portal.id === `${currentZone}-out`);
+  const routeTo = (zone: ZoneId, target: Pick<DioramaDestinationGuide, "name" | "x" | "z">) => {
+    if (currentZone === zone) return target;
+    if (exit) return { name: exit.label, x: exit.x, z: exit.z };
+    const entrance = portals.find((portal) => portal.entranceKind === zone);
+    return entrance ? { name: entrance.entranceName ?? entrance.label, x: entrance.x, z: entrance.z } : target;
+  };
+  let target: Pick<DioramaDestinationGuide, "name" | "x" | "z">;
+  if (save.completed) target = routeTo("hill", { name: "風鈴丘", x: 0, z: 0 });
+  else if (save.progress === 0) target = routeTo("village", { name: "イオ主任", x: 2.7, z: 34 });
+  else if (save.stitches.length < 3) {
+    const knots = [
+      { id: "stitch-dawn", name: "朝色の風綴り", x: -6.5, z: 10 },
+      { id: "stitch-cloud", name: "雲色の風綴り", x: 6.8, z: 1 },
+      { id: "stitch-bell", name: "鈴色の風綴り", x: -2.2, z: -8.5 },
+    ].filter((knot) => !save.stitches.includes(knot.id));
+    const nearestKnot = knots.sort((a, b) => Math.hypot(position.x - a.x, position.z - a.z) - Math.hypot(position.x - b.x, position.z - b.z))[0]
+      ?? { name: "風鈴丘", x: 0, z: 0 };
+    target = routeTo("hill", nearestKnot);
+  } else if (!save.recruited.includes("sui") || !save.chests.includes("annex-archive")) {
+    target = currentZone === "annex"
+      ? { name: save.recruited.includes("sui") ? "分室の保管箱" : "スイ", x: save.recruited.includes("sui") ? 47 : 38, z: save.recruited.includes("sui") ? 23 : 19 }
+      : routeTo("annex", { name: "スイ", x: 38, z: 19 });
+  } else if (save.preparations.length < 3) {
+    const needsEntranceStep = !save.preparations.includes("towa_repair") || !save.preparations.includes("sui_tuning");
+    target = routeTo("hill", needsEntranceStep
+      ? { name: "眠る風車・地下入口", x: 6, z: -9.3 }
+      : { name: "風鳥の古い巣", x: 9, z: -9.2 });
+  } else if (!save.bossDefeated) {
+    target = currentZone === "cellar"
+      ? { name: "眠り角ムルム", x: 41, z: -10 }
+      : routeTo("cellar", { name: "眠り角ムルム", x: 41, z: -10 });
+  } else target = routeTo("village", { name: "イオ主任", x: 2.7, z: 34 });
+  const dx = target.x - position.x;
+  const dz = target.z - position.z;
+  const direction = directionFromDelta(dx, dz);
+  return { ...target, direction, arrow: DIRECTION_ARROWS[direction], distance: Math.round(Math.hypot(dx, dz)) };
 }
 
 export function dioramaObjective(save: MinaDioramaChapterSave) {
@@ -442,6 +507,30 @@ function makeCanvasTexture(base: string, fleck: string, stripe = false) {
   texture.wrapT = THREE.RepeatWrapping;
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestMipmapNearestFilter;
+  return texture;
+}
+
+function makeSignTexture(label: string, accent: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.fillStyle = "rgba(9,31,26,.94)";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = accent;
+    context.lineWidth = 7;
+    context.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+    context.fillStyle = "#f8edca";
+    context.font = "700 42px 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(label, canvas.width / 2, canvas.height / 2 + 2, canvas.width - 34);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   return texture;
 }
 
@@ -733,6 +822,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       xp: save.xp,
       gold: save.gold,
       objective: dioramaObjective(save),
+      nextDestination: dioramaNextDestination(save),
       stitches: 0,
       party: ["ミナ"],
       equipment: save.equipment,
@@ -915,6 +1005,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     blockers.push({ x: -6, z: -12, r: 2.5 });
     const windmill = createWindmill(shared);
     windmill.lod.position.set(6, 0, -12);
+    windmill.lod.rotation.y = Math.PI;
     scene.add(windmill.lod);
     blockers.push({ x: 6, z: -12, r: 2.25 });
 
@@ -1108,6 +1199,52 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
 
     const portals = createDioramaPortalPlan();
 
+    const entranceStyles = {
+      shop: { color: 0xd58b63, accent: "#d58b63", cap: "spool" },
+      inn: { color: 0xe4c276, accent: "#e4c276", cap: "lantern" },
+      annex: { color: 0x77b69d, accent: "#77b69d", cap: "vane" },
+      cellar: { color: 0xa89bc9, accent: "#a89bc9", cap: "gear" },
+    } as const;
+    portals.filter((portal) => portal.entranceKind && portal.entranceName).forEach((portal) => {
+      const kind = portal.entranceKind;
+      if (!kind || !portal.entranceName) return;
+      const style = entranceStyles[kind];
+      const gate = new THREE.Group();
+      const gateMaterial = material(style.color, undefined, style.color);
+      gateMaterial.emissiveIntensity = .22;
+      [-1.35, 1.35].forEach((x) => {
+        const post = mesh(new THREE.CylinderGeometry(.1, .14, 2.35, 7), gateMaterial);
+        post.position.set(x, 1.18, 0);
+        gate.add(post);
+      });
+      const lintel = mesh(new THREE.BoxGeometry(3, .18, .2), gateMaterial);
+      lintel.position.set(0, 2.3, 0);
+      const footGlow = mesh(
+        new THREE.RingGeometry(.65, 1.35, 18),
+        new THREE.MeshBasicMaterial({ color: style.color, transparent: true, opacity: .42, side: THREE.DoubleSide }),
+      );
+      footGlow.rotation.x = -Math.PI / 2;
+      footGlow.position.y = .035;
+      const signTexture = makeSignTexture(portal.entranceName, style.accent);
+      const sign = mesh(
+        new THREE.PlaneGeometry(kind === "annex" ? 3.25 : 2.8, .68),
+        new THREE.MeshBasicMaterial({ map: signTexture, transparent: true, side: THREE.DoubleSide }),
+      );
+      sign.position.set(0, 2.72, 0);
+      const cap = style.cap === "gear"
+        ? mesh(new THREE.TorusGeometry(.38, .11, 6, 12), gateMaterial)
+        : style.cap === "spool"
+          ? mesh(new THREE.CylinderGeometry(.25, .25, .62, 10), gateMaterial)
+          : style.cap === "lantern"
+            ? mesh(new THREE.OctahedronGeometry(.35, 0), gateMaterial)
+            : mesh(new THREE.ConeGeometry(.32, .78, 4), gateMaterial);
+      cap.position.set(0, 3.38, 0);
+      if (style.cap === "spool") cap.rotation.z = Math.PI / 2;
+      gate.add(lintel, footGlow, sign, cap);
+      gate.position.set(portal.x, 0, portal.z);
+      scene.add(gate);
+    });
+
     portals.filter((portal) => portal.exit).forEach((portal) => {
       const marker = new THREE.Group();
       const threshold = mesh(new THREE.BoxGeometry(2.8, .08, .75), shared.glow);
@@ -1177,6 +1314,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
         xp: save.xp,
         gold: save.gold,
         objective: dioramaObjective(save),
+        nextDestination: dioramaNextDestination(save, { x: mina.position.x, z: mina.position.z }),
         stitches: save.stitches.length,
         party: ["ミナ", ...(save.recruited.includes("towa") ? ["トワ"] : []), ...(save.recruited.includes("sui") ? ["スイ"] : [])],
         equipment: { ...save.equipment },
@@ -1869,7 +2007,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
         const entries = Array.isArray(object.material) ? object.material : [object.material];
         entries.forEach((entry: THREE.Material) => {
           materials.add(entry);
-          if (entry instanceof THREE.MeshStandardMaterial && entry.map) textures.add(entry.map);
+          if ((entry instanceof THREE.MeshStandardMaterial || entry instanceof THREE.MeshBasicMaterial) && entry.map) textures.add(entry.map);
         });
       });
       geometries.forEach((geometry) => geometry.dispose());
@@ -1901,7 +2039,11 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
           </div>
           <div className="diorama-location"><small>AREA</small><strong>{hud.zone}</strong><span>{hud.party.join("・")}</span></div>
         </div>
-        <div className="diorama-objective"><small>現在の目的</small><strong>{hud.objective}</strong><span>風綴り {hud.stitches} / 3</span></div>
+        <div className="diorama-objective">
+          <small>現在の目的</small><strong>{hud.objective}</strong>
+          <span>次の場所：{hud.nextDestination.name}　{hud.nextDestination.arrow} {hud.nextDestination.direction}へ約{hud.nextDestination.distance}歩</span>
+          <span>風綴り {hud.stitches} / 3</span>
+        </div>
 
         {dialogue && (
           <button className="diorama-dialogue" onClick={() => confirmRef.current()} aria-label={`${dialogue.name}との会話を閉じる`}>

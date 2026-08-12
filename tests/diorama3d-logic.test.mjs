@@ -41,6 +41,88 @@ test("defines six bounded diorama zones with valid spawns and deterministic over
   assert.equal(game.dioramaZoneAt(-54, -30), null);
 });
 
+test("recovers room-edge and blocked saves without changing chapter progress", () => {
+  const rooms = [
+    { id: "annex", outside: { x: 41, z: 29 }, wall: { x: 32.5, z: 19.5 }, safe: { x: 41, z: 26 } },
+    { id: "cellar", outside: { x: 41, z: 4 }, wall: { x: 32.5, z: -6.5 }, safe: { x: 41, z: 1 } },
+    { id: "shop", outside: { x: -43, z: 35 }, wall: { x: -50.5, z: 28.5 }, safe: { x: -43, z: 32 } },
+    { id: "inn", outside: { x: -43, z: 18 }, wall: { x: -50.5, z: 11.5 }, safe: { x: -43, z: 15 } },
+  ];
+
+  for (const room of rooms) {
+    assert.equal(game.dioramaZoneAt(room.outside.x, room.outside.z), room.id);
+    assert.deepEqual(game.recoverDioramaSavedPosition(room.outside), room.safe, `${room.id} outer strip must recover`);
+    assert.deepEqual(
+      game.recoverDioramaSavedPosition(room.wall, () => false),
+      room.safe,
+      `${room.id} wall overlap must recover`,
+    );
+  }
+
+  const progressed = {
+    ...game.freshMinaDioramaSave(),
+    position: { ...rooms[0].outside },
+    level: 4,
+    xp: 250,
+    chests: ["annex-archive"],
+    stitches: ["stitch-dawn", "stitch-cloud", "stitch-bell"],
+    recruited: ["towa", "sui"],
+    progress: 4,
+    story: "boss",
+    preparations: ["towa_repair", "sui_tuning", "mina_nest_seen"],
+    savePoint: "annex",
+  };
+  const before = structuredClone(progressed);
+  const recovered = { ...progressed, position: game.recoverDioramaSavedPosition(progressed.position) };
+  const beforeProgress = { ...before };
+  const recoveredProgress = { ...recovered };
+  delete beforeProgress.position;
+  delete recoveredProgress.position;
+
+  assert.deepEqual(recovered.position, rooms[0].safe);
+  assert.deepEqual(recoveredProgress, beforeProgress, "position recovery must preserve all chapter progress");
+  assert.deepEqual(progressed, before, "position recovery must not mutate the source save");
+});
+
+test("keeps ordinary saved positions and sends unknown zones to the chapter start", () => {
+  const ordinaryPositions = [
+    { x: 0, z: 32 },
+    { x: 0, z: 4 },
+    { x: 41, z: 22 },
+    { x: 41, z: -6 },
+    { x: -43, z: 30 },
+    { x: -43, z: 11 },
+  ];
+
+  for (const position of ordinaryPositions) {
+    const before = { ...position };
+    const recovered = game.recoverDioramaSavedPosition(position, () => true);
+    assert.deepEqual(recovered, before);
+    assert.notEqual(recovered, position, "recovery must return a copy rather than mutating the saved object");
+    assert.deepEqual(position, before);
+  }
+
+  assert.deepEqual(game.recoverDioramaSavedPosition({ x: 20, z: 20 }), { x: 0, z: 32 });
+});
+
+test("places every room exit on its zone boundary within the doorway interaction radius", () => {
+  const zones = new Map(game.createDioramaMapPlan().map((zone) => [zone.id, zone]));
+  const exits = game.createDioramaPortalPlan().filter((portal) => portal.exit);
+  const expectedExitIds = ["shop-out", "inn-out", "annex-out", "cellar-out"];
+
+  assert.deepEqual(exits.map((portal) => portal.id), expectedExitIds);
+  for (const portal of exits) {
+    const zoneId = portal.id.replace("-out", "");
+    const zone = zones.get(zoneId);
+    assert.ok(zone, `${portal.id} must belong to a known room zone`);
+    assert.equal(portal.z, zone.maxZ, `${portal.id} must sit on the reachable outer boundary`);
+    assert.ok(portal.x >= zone.minX && portal.x <= zone.maxX);
+    const doorway = { x: portal.x, z: zone.maxZ - 0.5 };
+    assert.ok(Math.hypot(portal.x - doorway.x, portal.z - doorway.z) < 1.75, `${portal.id} must be in interaction range at the doorway`);
+    assert.equal(game.dioramaRoomExitAt(portal.x, portal.z), portal.id);
+  }
+});
+
 test("save validation rejects unknown values and clamps every bounded field", () => {
   const fresh = game.freshMinaDioramaSave();
   const restored = game.validateMinaDioramaSave({

@@ -139,6 +139,7 @@ type RuntimePortal = {
   toX: number;
   toZ: number;
   requires?: "stitches" | "sui";
+  exit?: boolean;
 };
 
 type BattleRuntime = {
@@ -155,6 +156,21 @@ type BattleRuntime = {
 
 const SAVE_KEY = "mori-lab-diorama-rpg-ch1-v1";
 const START = { x: 0, z: 32 };
+const ROOM_EXIT_RESCUES: ReadonlyArray<{
+  zone: Extract<ZoneId, "annex" | "cellar" | "shop" | "inn">;
+  safe: { x: number; z: number };
+  doorwayX: number;
+  doorwayHalfWidth: number;
+  frontZ: number;
+  innerMinX: number;
+  innerMaxX: number;
+  innerMinZ: number;
+}> = [
+  { zone: "annex", safe: { x: 41, z: 26 }, doorwayX: 41, doorwayHalfWidth: 1.65, frontZ: 28.5, innerMinX: 32.5, innerMaxX: 49.5, innerMinZ: 10.5 },
+  { zone: "cellar", safe: { x: 41, z: 1 }, doorwayX: 41, doorwayHalfWidth: 1.65, frontZ: 3.5, innerMinX: 32.5, innerMaxX: 49.5, innerMinZ: -16.5 },
+  { zone: "shop", safe: { x: -43, z: 32 }, doorwayX: -43, doorwayHalfWidth: 1.4, frontZ: 34.5, innerMinX: -50.5, innerMaxX: -35.5, innerMinZ: 22.5 },
+  { zone: "inn", safe: { x: -43, z: 15 }, doorwayX: -43, doorwayHalfWidth: 1.4, frontZ: 17.5, innerMinX: -50.5, innerMaxX: -35.5, innerMinZ: 5.5 },
+];
 const ITEM_KEYS: ItemKey[] = ["herb", "dew", "wakeLeaf", "returnRibbon"];
 const ITEM_NAMES: Record<ItemKey, string> = {
   herb: "丘草薬",
@@ -285,6 +301,44 @@ const MAP_PLAN = createDioramaMapPlan();
 
 export function dioramaZoneAt(x: number, z: number) {
   return MAP_PLAN.find((zone) => x >= zone.minX && x <= zone.maxX && z >= zone.minZ && z <= zone.maxZ)?.id ?? null;
+}
+
+export function recoverDioramaSavedPosition(
+  position: { x: number; z: number },
+  isWalkable: (x: number, z: number) => boolean = (x, z) => dioramaZoneAt(x, z) !== null,
+) {
+  const zoneId = dioramaZoneAt(position.x, position.z);
+  if (!zoneId) return { ...START };
+  const zone = MAP_PLAN.find((candidate) => candidate.id === zoneId) ?? MAP_PLAN[0];
+  const room = ROOM_EXIT_RESCUES.find((candidate) => candidate.zone === zoneId);
+  const outsideRoomInterior = room && (
+    position.x < room.innerMinX
+    || position.x > room.innerMaxX
+    || position.z < room.innerMinZ
+    || position.z > room.frontZ
+  );
+  if (!isWalkable(position.x, position.z) || outsideRoomInterior) return { ...(room?.safe ?? zone.spawn) };
+  return { ...position };
+}
+
+export function dioramaRoomExitAt(x: number, z: number) {
+  const zoneId = dioramaZoneAt(x, z);
+  const room = ROOM_EXIT_RESCUES.find((candidate) => candidate.zone === zoneId);
+  if (!room || z < room.frontZ - .18 || Math.abs(x - room.doorwayX) > room.doorwayHalfWidth) return null;
+  return `${room.zone}-out`;
+}
+
+export function createDioramaPortalPlan(): RuntimePortal[] {
+  return [
+    { id: "shop-in", label: "サナの織り店に入る", x: -8, z: 26.8, toX: -43, toZ: 32 },
+    { id: "shop-out", label: "風綴り村へ出る", x: -43, z: 35, toX: -8, toZ: 25.8, exit: true },
+    { id: "inn-in", label: "風待ち宿に入る", x: 8, z: 26.8, toX: -43, toZ: 15 },
+    { id: "inn-out", label: "風綴り村へ出る", x: -43, z: 18, toX: 8, toZ: 25.8, exit: true },
+    { id: "annex-in", label: "森研究所・風向分室に入る", x: -6, z: -9.3, toX: 41, toZ: 26 },
+    { id: "annex-out", label: "風鈴丘へ出る", x: 41, z: 29, toX: -6, toZ: -8.5, exit: true },
+    { id: "cellar-in", label: "眠る風車の地下へ降りる", x: 6, z: -9.3, toX: 41, toZ: 1, requires: "sui" },
+    { id: "cellar-out", label: "風鈴丘へ戻る", x: 41, z: 4, toX: 6, toZ: -8.5, exit: true },
+  ];
 }
 
 export function dioramaObjective(save: MinaDioramaChapterSave) {
@@ -710,7 +764,13 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     } catch {
       save = freshMinaDioramaSave();
     }
-    if (!dioramaZoneAt(save.position.x, save.position.z)) save = freshMinaDioramaSave();
+    const recoveredOnLoad = recoverDioramaSavedPosition(save.position);
+    if (recoveredOnLoad.x !== save.position.x || recoveredOnLoad.z !== save.position.z) {
+      save.position = recoveredOnLoad;
+      try {
+        window.localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+      } catch { /* The recovered in-memory save remains playable if storage is unavailable. */ }
+    }
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -1046,16 +1106,20 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     scene.add(windNest);
     collectibles.push({ id: "wind-nest", label: "風鳥の古い巣", node: windNest, kind: "nest" });
 
-    const portals: RuntimePortal[] = [
-      { id: "shop-in", label: "サナの織り店に入る", x: -8, z: 26.8, toX: -43, toZ: 32 },
-      { id: "shop-out", label: "風綴り村へ出る", x: -43, z: 33, toX: -8, toZ: 25.8 },
-      { id: "inn-in", label: "風待ち宿に入る", x: 8, z: 26.8, toX: -43, toZ: 15 },
-      { id: "inn-out", label: "風綴り村へ出る", x: -43, z: 16, toX: 8, toZ: 25.8 },
-      { id: "annex-in", label: "森研究所・風向分室に入る", x: -6, z: -9.3, toX: 41, toZ: 26 },
-      { id: "annex-out", label: "風鈴丘へ出る", x: 41, z: 27.2, toX: -6, toZ: -8.5 },
-      { id: "cellar-in", label: "眠る風車の地下へ降りる", x: 6, z: -9.3, toX: 41, toZ: 1, requires: "sui" },
-      { id: "cellar-out", label: "風鈴丘へ戻る", x: 41, z: 2.2, toX: 6, toZ: -8.5 },
-    ];
+    const portals = createDioramaPortalPlan();
+
+    portals.filter((portal) => portal.exit).forEach((portal) => {
+      const marker = new THREE.Group();
+      const threshold = mesh(new THREE.BoxGeometry(2.8, .08, .75), shared.glow);
+      threshold.position.y = .04;
+      const leftPost = mesh(new THREE.CylinderGeometry(.06, .08, 1.3, 6), shared.brass);
+      leftPost.position.set(-1.25, .65, 0);
+      const rightPost = leftPost.clone();
+      rightPost.position.x = 1.25;
+      marker.add(threshold, leftPost, rightPost);
+      marker.position.set(portal.x, 0, portal.z);
+      scene.add(marker);
+    });
 
     let battleRuntime: BattleRuntime | null = null;
     let menuIsOpen = false;
@@ -1150,12 +1214,17 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       if (!dioramaZoneAt(x, z)) return false;
       return !blockers.some((blocker) => Math.hypot(x - blocker.x, z - blocker.z) < blocker.r + .34);
     };
-    if (!walkable(mina.position.x, mina.position.z)) {
-      const safeSpawn = currentZone().spawn;
+    const recoveredPosition = recoverDioramaSavedPosition(save.position, walkable);
+    const recoveredSavedPosition = recoveredPosition.x !== save.position.x || recoveredPosition.z !== save.position.z;
+    if (recoveredSavedPosition) {
+      const safeSpawn = recoveredPosition;
       mina.position.set(safeSpawn.x, 0, safeSpawn.z);
       towaFollower.position.set(safeSpawn.x - 1, 0, safeSpawn.z + 1.2);
       suiFollower.position.set(safeSpawn.x + 1, 0, safeSpawn.z + 2.1);
       save.position = { ...safeSpawn };
+      try {
+        window.localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+      } catch { /* The recovered in-memory save remains playable if storage is unavailable. */ }
     }
     const teleport = (x: number, z: number) => {
       mina.position.set(x, 0, z);
@@ -1675,6 +1744,14 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
           const nextZ = mina.position.z + direction.z * speed * delta;
           if (walkable(nextX, mina.position.z)) mina.position.x = nextX;
           if (walkable(mina.position.x, nextZ)) mina.position.z = nextZ;
+          const roomExitId = dioramaRoomExitAt(mina.position.x, mina.position.z);
+          if (roomExitId) {
+            const portal = portals.find((candidate) => candidate.id === roomExitId);
+            if (portal) {
+              teleport(portal.toX, portal.toZ);
+              setMessage(portal.label);
+            }
+          }
         }
       }
       animateDoll(minaParts, moving, elapsed, 0);

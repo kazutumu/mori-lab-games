@@ -45,6 +45,37 @@ function assertInteractable(visited, x, y, label) {
   );
 }
 
+function makeMovementTestMap(blocked = []) {
+  const blockedTiles = new Set(blocked.map(([x, y]) => `${x},${y}`));
+  return {
+    id: "village",
+    name: "movement-test",
+    width: 5,
+    height: 5,
+    tiles: Array.from({ length: 5 }, (_, y) => (
+      Array.from({ length: 5 }, (_, x) => blockedTiles.has(`${x},${y}`) ? "water" : "grass")
+    )),
+    props: [],
+    npcs: [],
+    portals: [],
+    encounters: false,
+  };
+}
+
+function pathWorldDelta(path) {
+  return path.reduce((total, direction) => {
+    const [dx, dy] = game.MINA_PIXEL_WORLD_DIRECTION_DELTA[direction];
+    return { x: total.x + dx, y: total.y + dy };
+  }, { x: 0, y: 0 });
+}
+
+function pathScreenDelta(path) {
+  const world = pathWorldDelta(path);
+  const origin = game.projectMinaPixelFieldPoint(0, 0);
+  const target = game.projectMinaPixelFieldPoint(world.x, world.y);
+  return { x: target.x - origin.x, y: target.y - origin.y };
+}
+
 test("native-detail render profile keeps the authored pixel art legible", () => {
   assert.deepEqual(game.MINA_PIXEL_RENDER_PROFILE, {
     width: 1024,
@@ -72,6 +103,243 @@ test("isometric field projection keeps the 64 by 32 diamond rhythm deterministic
       y: (x + y) * 16,
     });
   }
+});
+
+test("eight screen directions map onto the isometric world without changing world-facing saves", () => {
+  const paths = game.MINA_PIXEL_SCREEN_DIRECTION_PATHS;
+  assert.deepEqual(Object.keys(paths).sort(), [
+    "down", "downLeft", "downRight", "left", "right", "up", "upLeft", "upRight",
+  ]);
+  assert.deepEqual(game.MINA_PIXEL_WORLD_DIRECTION_DELTA, {
+    up: [0, -1],
+    down: [0, 1],
+    left: [-1, 0],
+    right: [1, 0],
+  });
+
+  const cornerExpectations = {
+    upLeft: { path: ["left"], screen: { x: -32, y: -16 } },
+    upRight: { path: ["up"], screen: { x: 32, y: -16 } },
+    downLeft: { path: ["down"], screen: { x: -32, y: 16 } },
+    downRight: { path: ["right"], screen: { x: 32, y: 16 } },
+  };
+  for (const [screenDirection, expected] of Object.entries(cornerExpectations)) {
+    assert.deepEqual(paths[screenDirection], [expected.path], `${screenDirection} must use one world step`);
+    assert.deepEqual(pathScreenDelta(expected.path), expected.screen, `${screenDirection} must follow its visible corner`);
+  }
+
+  const cardinalScreenDeltas = {
+    up: { x: 0, y: -32 },
+    right: { x: 64, y: 0 },
+    down: { x: 0, y: 32 },
+    left: { x: -64, y: 0 },
+  };
+  for (const [screenDirection, expected] of Object.entries(cardinalScreenDeltas)) {
+    assert.equal(paths[screenDirection].length, 2, `${screenDirection} must offer both safe L routes`);
+    for (const candidate of paths[screenDirection]) {
+      assert.equal(candidate.length, 2, `${screenDirection} must be composed from two world steps`);
+      assert.deepEqual(pathScreenDelta(candidate), expected, `${screenDirection} must stay pure on screen`);
+      for (const direction of candidate) {
+        const [dx, dy] = game.MINA_PIXEL_WORLD_DIRECTION_DELTA[direction];
+        assert.equal(Math.abs(dx) + Math.abs(dy), 1, `${screenDirection}/${direction} must remain 4-neighbour movement`);
+      }
+    }
+  }
+
+  const fresh = game.freshMinaPixelChapterSave();
+  assert.equal(fresh.version, 1);
+  for (const direction of Object.keys(game.MINA_PIXEL_WORLD_DIRECTION_DELTA)) {
+    assert.equal(game.validateMinaPixelChapterSave({ ...fresh, direction }).direction, direction);
+  }
+  for (const screenOnlyDirection of ["upLeft", "upRight", "downLeft", "downRight"]) {
+    assert.equal(
+      game.validateMinaPixelChapterSave({ ...fresh, direction: screenOnlyDirection }).direction,
+      "up",
+      `${screenOnlyDirection} must not leak into the v1 world-facing save`,
+    );
+  }
+});
+
+test("screen-cardinal movement checks every world substep and never cuts a blocked corner", () => {
+  const start = { x: 2, y: 2 };
+  for (const screenDirection of ["up", "right", "down", "left"]) {
+    const [primary, alternate] = game.MINA_PIXEL_SCREEN_DIRECTION_PATHS[screenDirection];
+    assert.deepEqual(
+      game.chooseMinaPixelScreenMovePath(makeMovementTestMap(), start.x, start.y, screenDirection),
+      primary,
+      `${screenDirection} must choose its primary route when both are open`,
+    );
+    assert.deepEqual(
+      game.chooseMinaPixelScreenMovePath(makeMovementTestMap(), start.x, start.y, screenDirection, true),
+      alternate,
+      `${screenDirection} must alternate its L route when requested`,
+    );
+
+    const [primaryDx, primaryDy] = game.MINA_PIXEL_WORLD_DIRECTION_DELTA[primary[0]];
+    const [alternateDx, alternateDy] = game.MINA_PIXEL_WORLD_DIRECTION_DELTA[alternate[0]];
+    const primaryIntermediate = [start.x + primaryDx, start.y + primaryDy];
+    const alternateIntermediate = [start.x + alternateDx, start.y + alternateDy];
+
+    assert.deepEqual(
+      game.chooseMinaPixelScreenMovePath(
+        makeMovementTestMap([primaryIntermediate]),
+        start.x,
+        start.y,
+        screenDirection,
+      ),
+      alternate,
+      `${screenDirection} must use the open L route instead of crossing one blocked corner`,
+    );
+    assert.equal(
+      game.chooseMinaPixelScreenMovePath(
+        makeMovementTestMap([primaryIntermediate, alternateIntermediate]),
+        start.x,
+        start.y,
+        screenDirection,
+      ),
+      null,
+      `${screenDirection} must stop when both 4-neighbour routes are blocked`,
+    );
+  }
+});
+
+test("screen-cardinal paths never enter a portal before their final world step", () => {
+  const maps = game.createMinaPixelWorldMaps();
+  const cardinalDirections = ["up", "right", "down", "left"];
+  let checkedStarts = 0;
+  let rejectedIntermediatePortalCandidates = 0;
+  let acceptedFinalPortalPaths = 0;
+
+  for (const map of Object.values(maps)) {
+    const portalTiles = new Set(map.portals.map((portal) => `${portal.x},${portal.y}`));
+    for (let y = 0; y < map.height; y += 1) {
+      for (let x = 0; x < map.width; x += 1) {
+        if (!game.isMinaPixelTileWalkable(map, x, y)) continue;
+        checkedStarts += 1;
+        for (const screenDirection of cardinalDirections) {
+          const candidates = game.MINA_PIXEL_SCREEN_DIRECTION_PATHS[screenDirection];
+          for (const preferAlternate of [false, true]) {
+            const ordered = preferAlternate ? [candidates[1], candidates[0]] : candidates;
+            const eligible = [];
+            const rejected = [];
+
+            for (const candidate of ordered) {
+              let nextX = x;
+              let nextY = y;
+              let walkable = true;
+              let crossesPortal = false;
+              for (let index = 0; index < candidate.length; index += 1) {
+                const [dx, dy] = game.MINA_PIXEL_WORLD_DIRECTION_DELTA[candidate[index]];
+                nextX += dx;
+                nextY += dy;
+                if (!game.isMinaPixelTileWalkable(map, nextX, nextY)) {
+                  walkable = false;
+                  break;
+                }
+                if (index < candidate.length - 1 && portalTiles.has(`${nextX},${nextY}`)) {
+                  crossesPortal = true;
+                }
+              }
+              if (walkable && crossesPortal) {
+                rejected.push(candidate);
+                rejectedIntermediatePortalCandidates += 1;
+              } else if (walkable) {
+                eligible.push(candidate);
+              }
+            }
+
+            const result = game.chooseMinaPixelScreenMovePath(
+              map,
+              x,
+              y,
+              screenDirection,
+              preferAlternate,
+            );
+            assert.deepEqual(
+              result,
+              eligible[0] ? [...eligible[0]] : null,
+              `${map.id}:${x},${y} ${screenDirection} alternate=${preferAlternate} must choose the first portal-safe path`,
+            );
+            for (const candidate of rejected) {
+              assert.notDeepEqual(
+                result,
+                candidate,
+                `${map.id}:${x},${y} ${screenDirection} must reject a portal before the final step`,
+              );
+            }
+
+            if (result) {
+              let nextX = x;
+              let nextY = y;
+              for (let index = 0; index < result.length; index += 1) {
+                const [dx, dy] = game.MINA_PIXEL_WORLD_DIRECTION_DELTA[result[index]];
+                nextX += dx;
+                nextY += dy;
+                if (index < result.length - 1) {
+                  assert.equal(
+                    portalTiles.has(`${nextX},${nextY}`),
+                    false,
+                    `${map.id}:${x},${y} ${screenDirection} returned an intermediate portal`,
+                  );
+                } else if (portalTiles.has(`${nextX},${nextY}`)) {
+                  acceptedFinalPortalPaths += 1;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  assert.ok(checkedStarts > 0, "all six maps must contribute walkable starts");
+  assert.ok(rejectedIntermediatePortalCandidates > 0, "the exhaustive scan must exercise rejected intermediate portals");
+  assert.ok(acceptedFinalPortalPaths > 0, "a portal on the final substep must remain enterable");
+
+  const fixedRegressions = [
+    { map: "apothecary", x: 8, y: 9, direction: "down", expected: ["right", "down"] },
+    { map: "workshop", x: 8, y: 9, direction: "down", expected: ["right", "down"] },
+    { map: "village", x: 6, y: 9, direction: "up", expected: ["left", "up"] },
+    { map: "village", x: 23, y: 9, direction: "up", expected: ["left", "up"] },
+    { map: "forest", x: 20, y: 27, direction: "down", expected: ["right", "down"] },
+  ];
+  for (const regression of fixedRegressions) {
+    for (const preferAlternate of [false, true]) {
+      assert.deepEqual(
+        game.chooseMinaPixelScreenMovePath(
+          maps[regression.map],
+          regression.x,
+          regression.y,
+          regression.direction,
+          preferAlternate,
+        ),
+        regression.expected,
+        `${regression.map}:${regression.x},${regression.y} must avoid its adjacent portal even when alternate=${preferAlternate}`,
+      );
+    }
+  }
+});
+
+test("keyboard helpers expose cardinal Arrow and WASD controls plus QECV corners", () => {
+  const expected = {
+    ArrowUp: "up",
+    w: "up",
+    ArrowDown: "down",
+    s: "down",
+    ArrowLeft: "left",
+    a: "left",
+    ArrowRight: "right",
+    d: "right",
+    q: "upLeft",
+    e: "upRight",
+    c: "downLeft",
+    v: "downRight",
+  };
+  for (const [key, direction] of Object.entries(expected)) {
+    assert.equal(game.minaPixelScreenDirectionForKey(key), direction, `${key} must map to ${direction}`);
+    assert.equal(game.minaPixelScreenDirectionForKey(key.toUpperCase()), direction, `${key} mapping must be case-insensitive`);
+  }
+  assert.equal(game.minaPixelScreenDirectionForKey("z"), null);
 });
 
 test("village buildings and edge decoration preserve the authored walkability", () => {

@@ -205,6 +205,38 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(rpg2d, /context\.lineTo\(islandSouth\.x, islandSouth\.y \+ edgeDepth\)/);
   assert.match(rpg2d, /context\.lineTo\(islandEast\.x, islandEast\.y \+ edgeDepth\)/);
   assert.match(rpg2d, /save\.map === "village" && \(x === 0 \|\| y === 0 \|\| x === map\.width - 1 \|\| y === map\.height - 1\)\) continue/);
+  assert.match(rpg2d, /type Direction = "up" \| "down" \| "left" \| "right"/);
+  assert.match(rpg2d, /direction: Direction/);
+  assert.match(rpg2d, /version: 1/);
+  assert.match(rpg2d, /const SAVE_KEY = "mori-lab-jrpg-ch1-v1"/);
+  assert.match(rpg2d, /const screenDirection = minaPixelScreenDirectionForKey\(key\)/);
+  assert.match(rpg2d, /index < candidate\.length - 1\s*&& map\.portals\.some\(\(portal\) => portal\.x === x && portal\.y === y\)/);
+  const dpadBlock = rpg2d.match(/<div className="jrpg-dpad">([\s\S]*?)<\/div>/);
+  assert.ok(dpadBlock, "the pixel JRPG must retain a statically inspectable D-pad");
+  assert.equal((dpadBlock[1].match(/<button\b/g) ?? []).length, 8, "the D-pad must expose all eight screen directions");
+  assert.equal((dpadBlock[1].match(/onPointerDown=/g) ?? []).length, 8, "all eight directions must start on pointer down");
+  assert.equal((dpadBlock[1].match(/onPointerUp=/g) ?? []).length, 8, "all eight directions must release on pointer up");
+  assert.equal((dpadBlock[1].match(/onPointerCancel=/g) ?? []).length, 8, "all eight directions must release on pointer cancel");
+  assert.equal((dpadBlock[1].match(/onLostPointerCapture=/g) ?? []).length, 8, "all eight directions must release when pointer capture is lost");
+  const dpadDirections = {
+    upLeft: "画面の左上へ一歩",
+    up: "画面の上へ二歩",
+    upRight: "画面の右上へ一歩",
+    left: "画面の左へ二歩",
+    right: "画面の右へ二歩",
+    downLeft: "画面の左下へ一歩",
+    down: "画面の下へ二歩",
+    downRight: "画面の右下へ一歩",
+  };
+  for (const [direction, ariaLabel] of Object.entries(dpadDirections)) {
+    assert.match(dpadBlock[1], new RegExp(`aria-label="${ariaLabel}"[^>]*onPointerDown=\\{\\(event\\) => holdDirection\\("${direction}", true, event\\)\\}`));
+    assert.equal(
+      (dpadBlock[1].match(new RegExp(`holdDirection\\("${direction}", false, event\\)`, "g")) ?? []).length,
+      2,
+      `${direction} must release through both pointer up and cancel`,
+    );
+    assert.match(dpadBlock[1], new RegExp(`onLostPointerCapture=\\{\\(\\) => \\{ inputRef\\.current\\.${direction} = false; \\}\\}`));
+  }
   assert.match(readme, /既存セーブとの互換性を維持/);
   assert.match(rpg2d, /MINA_PIXEL_BATTLE_LAYOUT/);
   assert.match(rpg2d, /normalEnemy: \{ startX: 520, gapX: 170, y: 160, staggerY: 24, size: 128 \}/);

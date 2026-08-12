@@ -10,6 +10,7 @@ import {
 
 type Props = { onClear: () => void };
 type Direction = "up" | "down" | "left" | "right";
+export type MinaPixelScreenDirection = Direction | "upLeft" | "upRight" | "downLeft" | "downRight";
 type MapId = "village" | "apothecary" | "workshop" | "forest" | "laboratory" | "depths";
 type TileKey =
   | "grass" | "flowerGrass" | "cliff" | "forestCanopy" | "bush" | "water"
@@ -166,7 +167,44 @@ const ACTOR_HEIGHT = MINA_PIXEL_RENDER_PROFILE.actorHeight;
 const MOVE_TIME = 142;
 const MAP_IDS: MapId[] = ["village", "apothecary", "workshop", "forest", "laboratory", "depths"];
 const DIRECTIONS: Direction[] = ["up", "down", "left", "right"];
+const SCREEN_DIRECTIONS: MinaPixelScreenDirection[] = [
+  "up", "down", "left", "right", "upLeft", "upRight", "downLeft", "downRight",
+];
 const ITEM_KEYS: ItemKey[] = ["grassHerb", "dewBottle", "returnThread", "blueAcorn"];
+
+export const MINA_PIXEL_WORLD_DIRECTION_DELTA: Record<Direction, readonly [number, number]> = {
+  up: [0, -1],
+  down: [0, 1],
+  left: [-1, 0],
+  right: [1, 0],
+};
+
+export const MINA_PIXEL_SCREEN_DIRECTION_PATHS: Record<
+  MinaPixelScreenDirection,
+  readonly (readonly Direction[])[]
+> = {
+  up: [["left", "up"], ["up", "left"]],
+  right: [["up", "right"], ["right", "up"]],
+  down: [["right", "down"], ["down", "right"]],
+  left: [["down", "left"], ["left", "down"]],
+  upLeft: [["left"]],
+  upRight: [["up"]],
+  downLeft: [["down"]],
+  downRight: [["right"]],
+};
+
+export function minaPixelScreenDirectionForKey(key: string): MinaPixelScreenDirection | null {
+  const normalized = key.toLowerCase();
+  if (normalized === "arrowup" || normalized === "w") return "up";
+  if (normalized === "arrowdown" || normalized === "s") return "down";
+  if (normalized === "arrowleft" || normalized === "a") return "left";
+  if (normalized === "arrowright" || normalized === "d") return "right";
+  if (normalized === "q") return "upLeft";
+  if (normalized === "e") return "upRight";
+  if (normalized === "c") return "downLeft";
+  if (normalized === "v") return "downRight";
+  return null;
+}
 
 const ASSET_URLS = {
   tileGrass: "/game-assets/rpg2d-ch1/tile-grass-v1.png",
@@ -527,6 +565,51 @@ export function isMinaPixelTileWalkable(map: PixelMapDefinition, x: number, y: n
   return ignoreNpc || !map.npcs.some((npc) => npc.x === x && npc.y === y);
 }
 
+export function chooseMinaPixelScreenMovePath(
+  map: PixelMapDefinition,
+  startX: number,
+  startY: number,
+  screenDirection: MinaPixelScreenDirection,
+  preferAlternate = false,
+): Direction[] | null {
+  const candidates = MINA_PIXEL_SCREEN_DIRECTION_PATHS[screenDirection];
+  const ordered = preferAlternate && candidates.length > 1
+    ? [candidates[1], candidates[0]]
+    : candidates;
+  for (const candidate of ordered) {
+    let x = startX;
+    let y = startY;
+    let valid = true;
+    const path: Direction[] = [];
+    for (let index = 0; index < candidate.length; index += 1) {
+      const direction = candidate[index];
+      const [dx, dy] = MINA_PIXEL_WORLD_DIRECTION_DELTA[direction];
+      x += dx;
+      y += dy;
+      if (!isMinaPixelTileWalkable(map, x, y)) {
+        valid = false;
+        break;
+      }
+      path.push(direction);
+      if (index < candidate.length - 1
+        && map.portals.some((portal) => portal.x === x && portal.y === y)) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) return path;
+  }
+  return null;
+}
+
+export function minaPixelFacingForScreenDirection(
+  screenDirection: MinaPixelScreenDirection,
+  preferAlternate = false,
+): Direction {
+  const candidates = MINA_PIXEL_SCREEN_DIRECTION_PATHS[screenDirection];
+  return (preferAlternate && candidates.length > 1 ? candidates[1] : candidates[0])[0];
+}
+
 function objectiveFor(save: MinaPixelChapterSave) {
   if (save.completed) return "第1章クリア：北をなくした森に方角が戻った";
   if (save.progress === 0) return "灯枝村のイト研究員に話しかける";
@@ -602,7 +685,20 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const saveRef = useRef<MinaPixelChapterSave>(freshMinaPixelChapterSave());
   const imagesRef = useRef<Partial<Record<AssetKey, HTMLImageElement>>>({});
-  const inputRef = useRef<Record<Direction, boolean>>({ up: false, down: false, left: false, right: false });
+  const inputRef = useRef<Record<MinaPixelScreenDirection, boolean>>({
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+    upLeft: false,
+    upRight: false,
+    downLeft: false,
+    downRight: false,
+  });
+  const screenCommandRequestedRef = useRef<MinaPixelScreenDirection | null>(null);
+  const moveQueueRef = useRef<Direction[]>([]);
+  const alternatePathRef = useRef(false);
+  const screenHoldSuppressedRef = useRef(false);
   const movementRef = useRef<Movement | null>(null);
   const interactionRequested = useRef(false);
   const dialogueRef = useRef<DialogueBox | null>(null);
@@ -645,6 +741,9 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
   }, [publishSnapshot]);
 
   const showDialogue = useCallback((speaker: string, pages: string[], after?: DialogueBox["after"]) => {
+    moveQueueRef.current = [];
+    screenCommandRequestedRef.current = null;
+    screenHoldSuppressedRef.current = true;
     const box: DialogueBox = { speaker, pages, index: 0, after };
     dialogueRef.current = box;
     setDialogue(box);
@@ -656,11 +755,21 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
   }, []);
 
   const setMenuState = useCallback((open: boolean) => {
+    if (open) {
+      moveQueueRef.current = [];
+      screenCommandRequestedRef.current = null;
+      screenHoldSuppressedRef.current = true;
+    }
     menuRef.current = open;
     setMenuOpen(open);
   }, []);
 
   const setShopState = useCallback((open: boolean) => {
+    if (open) {
+      moveQueueRef.current = [];
+      screenCommandRequestedRef.current = null;
+      screenHoldSuppressedRef.current = true;
+    }
     shopRef.current = open;
     setShopOpen(open);
   }, []);
@@ -808,6 +917,9 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
 
   const startBattle = useCallback((boss = false) => {
     if (battleRef.current) return;
+    moveQueueRef.current = [];
+    screenCommandRequestedRef.current = null;
+    screenHoldSuppressedRef.current = true;
     let enemies: BattleEnemy[];
     if (boss) {
       enemies = [enemyTemplate("boss", 0)];
@@ -1002,6 +1114,9 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
     next.gold = Math.floor(next.gold * .8);
     saveRef.current = next;
     movementRef.current = null;
+    moveQueueRef.current = [];
+    screenCommandRequestedRef.current = null;
+    screenHoldSuppressedRef.current = true;
     setBattleState(null);
     persist("灯枝村で目覚め、保存しました");
     showDialogue("ハル薬師", ["倒れても、観測は終わりません。木貨を少し薬代にして、体を整えておきました。"]);
@@ -1037,6 +1152,9 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       next.y = 17;
       next.direction = "up";
       movementRef.current = null;
+      moveQueueRef.current = [];
+      screenCommandRequestedRef.current = null;
+      screenHoldSuppressedRef.current = true;
     }
     saveRef.current = next;
     persist(`${ITEM_LABELS[item]}を使って保存しました`);
@@ -1474,6 +1592,9 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       next.direction = portal.toY < save.y ? "up" : "down";
       saveRef.current = next;
       movementRef.current = null;
+      moveQueueRef.current = [];
+      screenCommandRequestedRef.current = null;
+      screenHoldSuppressedRef.current = true;
       safeStepsRef.current = 0;
       persist(`${WORLD_MAPS[portal.to].name}へ移動して保存しました`);
       if (portal.to === "laboratory" && save.map === "forest") {
@@ -1499,19 +1620,48 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       publishSnapshot();
     };
 
-    const beginMove = (direction: Direction, now: number) => {
+    const beginWorldMove = (direction: Direction, now: number) => {
       if (movementRef.current || dialogueRef.current || menuRef.current || shopRef.current || battleRef.current) return;
       const save = saveRef.current;
-      const delta: Record<Direction, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-      const [dx, dy] = delta[direction];
+      const [dx, dy] = MINA_PIXEL_WORLD_DIRECTION_DELTA[direction];
       const targetX = save.x + dx;
       const targetY = save.y + dy;
       save.direction = direction;
       if (!isMinaPixelTileWalkable(WORLD_MAPS[save.map], targetX, targetY)) {
+        moveQueueRef.current = [];
         publishSnapshot();
         return;
       }
       movementRef.current = { fromX: save.x, fromY: save.y, toX: targetX, toY: targetY, startedAt: now };
+    };
+
+    const beginNextQueuedMove = (now: number) => {
+      const direction = moveQueueRef.current.shift();
+      if (direction) beginWorldMove(direction, now);
+    };
+
+    const issueScreenMove = (screenDirection: MinaPixelScreenDirection, now: number) => {
+      if (movementRef.current || moveQueueRef.current.length > 0
+        || dialogueRef.current || menuRef.current || shopRef.current || battleRef.current) return;
+      const save = saveRef.current;
+      const preferAlternate = alternatePathRef.current;
+      const path = chooseMinaPixelScreenMovePath(
+        WORLD_MAPS[save.map],
+        save.x,
+        save.y,
+        screenDirection,
+        preferAlternate,
+      );
+      if (!path) {
+        save.direction = minaPixelFacingForScreenDirection(screenDirection, preferAlternate);
+        publishSnapshot();
+        return;
+      }
+      if (MINA_PIXEL_SCREEN_DIRECTION_PATHS[screenDirection].length > 1) {
+        alternatePathRef.current = !alternatePathRef.current;
+      }
+      moveQueueRef.current = path;
+      beginNextQueuedMove(now);
     };
 
     const tick = (now: number) => {
@@ -1522,20 +1672,37 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       }
       const movement = movementRef.current;
       if (movement && now - movement.startedAt >= MOVE_TIME) {
+        const mapBeforeStep = saveRef.current.map;
         saveRef.current.x = movement.toX;
         saveRef.current.y = movement.toY;
         saveRef.current.steps += 1;
         movementRef.current = null;
         afterStep();
+        if (saveRef.current.map !== mapBeforeStep || dialogueRef.current || battleRef.current || menuRef.current || shopRef.current) {
+          moveQueueRef.current = [];
+          screenHoldSuppressedRef.current = true;
+        } else if (moveQueueRef.current.length > 0) {
+          beginNextQueuedMove(now);
+        }
       }
       if (interactionRequested.current) {
         interactionRequested.current = false;
         interactHandlerRef.current();
       }
-      if (!movementRef.current && now - lastDirectionRepeat > 90) {
-        const direction = DIRECTIONS.find((candidate) => inputRef.current[candidate]);
-        if (direction) {
-          beginMove(direction, now);
+      const requestedDirection = screenCommandRequestedRef.current;
+      let handledRequest = false;
+      if (requestedDirection && !movementRef.current && moveQueueRef.current.length === 0
+        && !dialogueRef.current && !menuRef.current && !shopRef.current && !battleRef.current) {
+        screenCommandRequestedRef.current = null;
+        handledRequest = true;
+        issueScreenMove(requestedDirection, now);
+        lastDirectionRepeat = now;
+      }
+      if (!handledRequest && !screenHoldSuppressedRef.current
+        && !movementRef.current && moveQueueRef.current.length === 0 && now - lastDirectionRepeat > 90) {
+        const heldDirection = SCREEN_DIRECTIONS.find((candidate) => inputRef.current[candidate]);
+        if (heldDirection) {
+          issueScreenMove(heldDirection, now);
           lastDirectionRepeat = now;
         }
       }
@@ -1549,22 +1716,39 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
     const keydown = (event: KeyboardEvent) => {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(event.key)) event.preventDefault();
       const key = event.key.toLowerCase();
-      if (key === "arrowup" || key === "w") inputRef.current.up = true;
-      else if (key === "arrowdown" || key === "s") inputRef.current.down = true;
-      else if (key === "arrowleft" || key === "a") inputRef.current.left = true;
-      else if (key === "arrowright" || key === "d") inputRef.current.right = true;
-      else if (!event.repeat && (key === "z" || key === "enter" || key === " ")) confirmHandlerRef.current();
+      const screenDirection = minaPixelScreenDirectionForKey(key);
+      if (screenDirection) {
+        if (!inputRef.current[screenDirection] && !event.repeat) {
+          if (!dialogueRef.current && !menuRef.current && !shopRef.current && !battleRef.current) {
+            screenHoldSuppressedRef.current = false;
+            screenCommandRequestedRef.current = screenDirection;
+          }
+        }
+        inputRef.current[screenDirection] = true;
+      } else if (!event.repeat && (key === "z" || key === "enter" || key === " ")) confirmHandlerRef.current();
       else if (!event.repeat && (key === "x" || key === "escape")) cancelHandlerRef.current();
       else if (!event.repeat && key === "m") menuHandlerRef.current();
     };
     const keyup = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if (key === "arrowup" || key === "w") inputRef.current.up = false;
-      else if (key === "arrowdown" || key === "s") inputRef.current.down = false;
-      else if (key === "arrowleft" || key === "a") inputRef.current.left = false;
-      else if (key === "arrowright" || key === "d") inputRef.current.right = false;
+      const screenDirection = minaPixelScreenDirectionForKey(key);
+      if (screenDirection) inputRef.current[screenDirection] = false;
     };
-    const stopInput = () => { inputRef.current = { up: false, down: false, left: false, right: false }; };
+    const stopInput = () => {
+      inputRef.current = {
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        upLeft: false,
+        upRight: false,
+        downLeft: false,
+        downRight: false,
+      };
+      screenCommandRequestedRef.current = null;
+      moveQueueRef.current = [];
+      screenHoldSuppressedRef.current = false;
+    };
     const visibility = () => {
       visible = !document.hidden;
       stopInput();
@@ -1605,10 +1789,14 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
     if (battleTimerRef.current !== null) window.clearTimeout(battleTimerRef.current);
   }, []);
 
-  const holdDirection = useCallback((direction: Direction, active: boolean, event: ReactPointerEvent<HTMLButtonElement>) => {
+  const holdDirection = useCallback((direction: MinaPixelScreenDirection, active: boolean, event: ReactPointerEvent<HTMLButtonElement>) => {
     if (active) {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
+      if (!dialogueRef.current && !menuRef.current && !shopRef.current && !battleRef.current) {
+        screenHoldSuppressedRef.current = false;
+        screenCommandRequestedRef.current = direction;
+      }
     } else if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -1737,10 +1925,27 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
 
       <div className="jrpg-touch" aria-label="タッチ操作">
         <div className="jrpg-dpad">
-          <button className="up" aria-label="上へ" onPointerDown={(event) => holdDirection("up", true, event)} onPointerUp={(event) => holdDirection("up", false, event)} onPointerCancel={(event) => holdDirection("up", false, event)} onLostPointerCapture={() => { inputRef.current.up = false; }}>▲</button>
-          <button className="left" aria-label="左へ" onPointerDown={(event) => holdDirection("left", true, event)} onPointerUp={(event) => holdDirection("left", false, event)} onPointerCancel={(event) => holdDirection("left", false, event)} onLostPointerCapture={() => { inputRef.current.left = false; }}>◀</button>
-          <button className="down" aria-label="下へ" onPointerDown={(event) => holdDirection("down", true, event)} onPointerUp={(event) => holdDirection("down", false, event)} onPointerCancel={(event) => holdDirection("down", false, event)} onLostPointerCapture={() => { inputRef.current.down = false; }}>▼</button>
-          <button className="right" aria-label="右へ" onPointerDown={(event) => holdDirection("right", true, event)} onPointerUp={(event) => holdDirection("right", false, event)} onPointerCancel={(event) => holdDirection("right", false, event)} onLostPointerCapture={() => { inputRef.current.right = false; }}>▶</button>
+          <button className="up-left" style={{ gridColumn: 1, gridRow: 1 }} aria-label="画面の左上へ一歩" onPointerDown={(event) => holdDirection("upLeft", true, event)} onPointerUp={(event) => holdDirection("upLeft", false, event)} onPointerCancel={(event) => holdDirection("upLeft", false, event)} onLostPointerCapture={() => { inputRef.current.upLeft = false; }}>↖</button>
+          <button className="up" aria-label="画面の上へ二歩" onPointerDown={(event) => holdDirection("up", true, event)} onPointerUp={(event) => holdDirection("up", false, event)} onPointerCancel={(event) => holdDirection("up", false, event)} onLostPointerCapture={() => { inputRef.current.up = false; }}>↑</button>
+          <button className="up-right" style={{ gridColumn: 3, gridRow: 1 }} aria-label="画面の右上へ一歩" onPointerDown={(event) => holdDirection("upRight", true, event)} onPointerUp={(event) => holdDirection("upRight", false, event)} onPointerCancel={(event) => holdDirection("upRight", false, event)} onLostPointerCapture={() => { inputRef.current.upRight = false; }}>↗</button>
+          <button className="left" aria-label="画面の左へ二歩" onPointerDown={(event) => holdDirection("left", true, event)} onPointerUp={(event) => holdDirection("left", false, event)} onPointerCancel={(event) => holdDirection("left", false, event)} onLostPointerCapture={() => { inputRef.current.left = false; }}>←</button>
+          <span
+            aria-label="8方向移動"
+            style={{
+              gridColumn: 2,
+              gridRow: 2,
+              display: "grid",
+              placeItems: "center",
+              color: "#d9b75a",
+              fontSize: 10,
+              lineHeight: 1.1,
+              textAlign: "center",
+            }}
+          >8<br />方向</span>
+          <button className="right" aria-label="画面の右へ二歩" onPointerDown={(event) => holdDirection("right", true, event)} onPointerUp={(event) => holdDirection("right", false, event)} onPointerCancel={(event) => holdDirection("right", false, event)} onLostPointerCapture={() => { inputRef.current.right = false; }}>→</button>
+          <button className="down-left" style={{ gridColumn: 1, gridRow: 3 }} aria-label="画面の左下へ一歩" onPointerDown={(event) => holdDirection("downLeft", true, event)} onPointerUp={(event) => holdDirection("downLeft", false, event)} onPointerCancel={(event) => holdDirection("downLeft", false, event)} onLostPointerCapture={() => { inputRef.current.downLeft = false; }}>↙</button>
+          <button className="down" aria-label="画面の下へ二歩" onPointerDown={(event) => holdDirection("down", true, event)} onPointerUp={(event) => holdDirection("down", false, event)} onPointerCancel={(event) => holdDirection("down", false, event)} onLostPointerCapture={() => { inputRef.current.down = false; }}>↓</button>
+          <button className="down-right" style={{ gridColumn: 3, gridRow: 3 }} aria-label="画面の右下へ一歩" onPointerDown={(event) => holdDirection("downRight", true, event)} onPointerUp={(event) => holdDirection("downRight", false, event)} onPointerCancel={(event) => holdDirection("downRight", false, event)} onLostPointerCapture={() => { inputRef.current.downRight = false; }}>↘</button>
         </div>
         <div className="jrpg-action-buttons">
           <button className="jrpg-menu-button" onClick={() => menuHandlerRef.current()}>メニュー<br /><small>M</small></button>
@@ -1748,7 +1953,7 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
           <button className="jrpg-confirm-button" onClick={() => confirmHandlerRef.current()}>決定・調べる<br /><small>Z / Enter</small></button>
         </div>
       </div>
-      <p className="jrpg-help">移動：十字キー / WASD　決定：Z / Enter　取消：X / Esc　メニュー：M　進行・戦闘後・マップ移動時に自動保存</p>
+      <p className="jrpg-help">移動：十字キー / WASD　斜め：Q↖・E↗・C↙・V↘　決定：Z / Enter　取消：X / Esc　メニュー：M　進行・戦闘後・マップ移動時に自動保存</p>
     </section>
   );
 }

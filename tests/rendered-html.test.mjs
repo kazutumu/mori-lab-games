@@ -30,6 +30,7 @@ test("renders the Mori Lab game collection", async () => {
   const rpg3d = await readFile(new URL("../app/MinaRPGGame.tsx", import.meta.url), "utf8");
   const rpg2d = await readFile(new URL("../app/MinaPixelRPGGame.tsx", import.meta.url), "utf8");
   const diorama3d = await readFile(new URL("../app/MinaDioramaRPGGame.tsx", import.meta.url), "utf8");
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
   const rpgSocialCard = await stat(new URL("../public/og-rpg-v1.png", import.meta.url));
   const rpg2dSocialCard = await stat(new URL("../public/og-rpg2d-v1.png", import.meta.url));
   const diorama3dSocialCard = await stat(new URL("../public/og-diorama-rpg-v1.png", import.meta.url));
@@ -177,6 +178,8 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(source, /type Mode = [^;]*"rpg2d"/);
   assert.match(source, /mode === "rpg2d"/);
   assert.match(source, /ミナと星苔の方位盤 第一章・北をなくした森/);
+  assert.match(source, /海に浮かぶ一島を斜め見下ろしで描く、直立ピクセル人物の2DジオラマJRPG/);
+  assert.doesNotMatch(source, /64px地形へ全面展開/);
   assert.match(source, /11 · M1 PIXEL JRPG · CHAPTER 01/);
   assert.match(source, /reward\("rpg2d", 14\)/);
   assert.match(source, /12の育成ゲーム/);
@@ -190,6 +193,19 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(rpg2d, /actorWidth: 72/);
   assert.match(rpg2d, /actorHeight: 96/);
   assert.match(rpg2d, /mode: "native-detail"/);
+  assert.match(rpg2d, /MINA_PIXEL_FIELD_PROFILE/);
+  assert.match(rpg2d, /tileWidth: 64/);
+  assert.match(rpg2d, /tileDepth: 32/);
+  assert.match(rpg2d, /rowSkew: -32/);
+  assert.match(rpg2d, /islandEdgeDepth: 28/);
+  assert.match(rpg2d, /mode: "isometric-diorama"/);
+  assert.match(rpg2d, /context\.transform\(\.5, \.25, -\.5, \.25, 0, 0\)/);
+  assert.match(rpg2d, /const islandInset = save\.map === "village" \? 1 : 0/);
+  assert.match(rpg2d, /projectMinaPixelFieldPoint\(map\.width - islandInset, map\.height - islandInset\)/);
+  assert.match(rpg2d, /context\.lineTo\(islandSouth\.x, islandSouth\.y \+ edgeDepth\)/);
+  assert.match(rpg2d, /context\.lineTo\(islandEast\.x, islandEast\.y \+ edgeDepth\)/);
+  assert.match(rpg2d, /save\.map === "village" && \(x === 0 \|\| y === 0 \|\| x === map\.width - 1 \|\| y === map\.height - 1\)\) continue/);
+  assert.match(readme, /既存セーブとの互換性を維持/);
   assert.match(rpg2d, /MINA_PIXEL_BATTLE_LAYOUT/);
   assert.match(rpg2d, /normalEnemy: \{ startX: 520, gapX: 170, y: 160, staggerY: 24, size: 128 \}/);
   assert.match(rpg2d, /boss: \{ x: 650, y: 160, size: 192 \}/);

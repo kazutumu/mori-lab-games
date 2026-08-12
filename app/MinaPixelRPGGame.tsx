@@ -145,6 +145,19 @@ export const MINA_PIXEL_BATTLE_LAYOUT = {
   hpPanelHeight: 42,
   messagePanel: { x: 16, y: 16, width: 992, height: 72 },
 } as const;
+export const MINA_PIXEL_FIELD_PROFILE = {
+  tileWidth: 64,
+  tileDepth: 32,
+  rowSkew: -32,
+  islandEdgeDepth: 28,
+  mode: "isometric-diorama",
+} as const;
+export function projectMinaPixelFieldPoint(x: number, y: number) {
+  return {
+    x: x * MINA_PIXEL_FIELD_PROFILE.tileWidth / 2 + y * MINA_PIXEL_FIELD_PROFILE.rowSkew,
+    y: (x + y) * MINA_PIXEL_FIELD_PROFILE.tileDepth / 2,
+  };
+}
 const LOGICAL_WIDTH = MINA_PIXEL_RENDER_PROFILE.width;
 const LOGICAL_HEIGHT = MINA_PIXEL_RENDER_PROFILE.height;
 const TILE = MINA_PIXEL_RENDER_PROFILE.tile;
@@ -361,17 +374,21 @@ function frame(tiles: TileKey[][], tile: TileKey) {
 export function createMinaPixelWorldMaps(): Record<MapId, PixelMapDefinition> {
   const villageTiles = grid(30, 22, "grass");
   frame(villageTiles, "water");
+  paint(villageTiles, 4, 4, 5, 5, "stoneFloor");
+  paint(villageTiles, 21, 4, 5, 5, "stoneFloor");
+  paint(villageTiles, 13, 2, 5, 5, "stoneFloor");
   paint(villageTiles, 14, 1, 3, 20, "path");
   paint(villageTiles, 2, 11, 26, 3, "path");
+  paint(villageTiles, 5, 8, 3, 2, "path");
+  paint(villageTiles, 22, 8, 3, 2, "path");
   paint(villageTiles, 2, 17, 9, 2, "flowerGrass");
   paint(villageTiles, 20, 15, 8, 3, "flowerGrass");
-  paint(villageTiles, 1, 1, 4, 5, "slateRoof");
   const village: PixelMapDefinition = {
     id: "village", name: "灯枝村", width: 30, height: 22, tiles: villageTiles, encounters: false,
     props: [
-      { id: "ito-house", asset: "propCottage", x: 6, y: 7, width: 192, height: 160, block: { left: 2, right: 2, top: 3, bottom: 0 } },
-      { id: "roku-house", asset: "propCottage", x: 23, y: 7, width: 192, height: 160, block: { left: 2, right: 2, top: 3, bottom: 0 } },
-      { id: "village-lab", asset: "propLaboratory", x: 15, y: 5, width: 192, height: 160, block: { left: 2, right: 2, top: 3, bottom: 0 } },
+      { id: "ito-house", asset: "propCottage", x: 6, y: 7, width: 192, height: 160, block: { left: 1, right: 1, top: 2, bottom: 0 } },
+      { id: "roku-house", asset: "propCottage", x: 23, y: 7, width: 192, height: 160, block: { left: 1, right: 1, top: 2, bottom: 0 } },
+      { id: "village-lab", asset: "propLaboratory", x: 15, y: 5, width: 192, height: 160, block: { left: 1, right: 1, top: 2, bottom: 0 } },
       { id: "village-tree-a", asset: "propBroadleaf", x: 4, y: 15, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
       { id: "village-tree-b", asset: "propEvergreen", x: 26, y: 17, width: 128, height: 160, block: { left: 0, right: 0, top: 0, bottom: 0 } },
       { id: "village-sign", asset: "propSignpost", x: 18, y: 17, width: 72, height: 96, block: { left: 0, right: 0, top: 0, bottom: 0 } },
@@ -1154,66 +1171,218 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       };
     };
 
-    const cameraFor = (map: PixelMapDefinition, position: { x: number; y: number }) => ({
-      x: map.width * TILE <= LOGICAL_WIDTH
-        ? -(LOGICAL_WIDTH - map.width * TILE) / 2
-        : clamp(position.x * TILE + TILE / 2 - LOGICAL_WIDTH / 2, 0, map.width * TILE - LOGICAL_WIDTH),
-      y: map.height * TILE <= LOGICAL_HEIGHT
-        ? -(LOGICAL_HEIGHT - map.height * TILE) / 2
-        : clamp(position.y * TILE + TILE / 2 - LOGICAL_HEIGHT / 2, 0, map.height * TILE - LOGICAL_HEIGHT),
-    });
+    const fieldProfile = MINA_PIXEL_FIELD_PROFILE;
+    const fieldTopMargin = 96;
+    const projectedFoot = (x: number, y: number) => {
+      const point = projectMinaPixelFieldPoint(x + .5, y + .5);
+      return {
+        x: point.x,
+        y: point.y + fieldTopMargin,
+      };
+    };
+    const cameraFor = (map: PixelMapDefinition, position: { x: number; y: number }) => {
+      const foot = projectedFoot(position.x, position.y);
+      const west = projectMinaPixelFieldPoint(0, map.height).x;
+      const east = projectMinaPixelFieldPoint(map.width, 0).x;
+      const mapWidth = east - west;
+      const mapHeight = fieldTopMargin
+        + projectMinaPixelFieldPoint(map.width, map.height).y
+        + fieldProfile.islandEdgeDepth;
+      return {
+        x: Math.round(mapWidth <= LOGICAL_WIDTH
+          ? west - (LOGICAL_WIDTH - mapWidth) / 2
+          : clamp(foot.x - LOGICAL_WIDTH / 2, west, east - LOGICAL_WIDTH)),
+        y: Math.round(mapHeight <= LOGICAL_HEIGHT
+          ? -(LOGICAL_HEIGHT - mapHeight) / 2
+          : clamp(foot.y - LOGICAL_HEIGHT * .48, 0, mapHeight - LOGICAL_HEIGHT)),
+      };
+    };
 
     const visibleRect = (left: number, top: number, width: number, height: number) => (
       left + width >= -TILE && left <= LOGICAL_WIDTH + TILE
       && top + height >= -TILE && top <= LOGICAL_HEIGHT + TILE
     );
 
+    const waterGradient = context.createLinearGradient(0, 0, 0, LOGICAL_HEIGHT);
+    waterGradient.addColorStop(0, "#79b9be");
+    waterGradient.addColorStop(.52, "#2d7771");
+    waterGradient.addColorStop(1, "#0b3d3b");
+    const indoorGradient = context.createRadialGradient(
+      LOGICAL_WIDTH / 2,
+      LOGICAL_HEIGHT * .48,
+      80,
+      LOGICAL_WIDTH / 2,
+      LOGICAL_HEIGHT * .48,
+      LOGICAL_WIDTH * .7,
+    );
+    indoorGradient.addColorStop(0, "#16302a");
+    indoorGradient.addColorStop(.58, "#091d1a");
+    indoorGradient.addColorStop(1, "#03100f");
+
+    const drawFootShadow = (x: number, y: number, width: number, alpha = .25) => {
+      context.save();
+      context.fillStyle = `rgba(3, 16, 14, ${alpha})`;
+      context.beginPath();
+      context.ellipse(
+        Math.round(x),
+        Math.round(y - 3),
+        Math.round(clamp(width * .24, 9, 54)),
+        Math.round(clamp(width * .065, 4, 11)),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      context.fill();
+      context.restore();
+    };
+
     const drawField = (now: number) => {
       const save = saveRef.current;
       const map = WORLD_MAPS[save.map];
       const position = visualPosition(now);
       const camera = cameraFor(map, position);
-      context.fillStyle = "#071b19";
+      const outdoor = save.map === "village" || save.map === "forest";
+      context.fillStyle = outdoor ? waterGradient : indoorGradient;
       context.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-      const startX = Math.max(0, Math.floor(camera.x / TILE));
-      const endX = Math.min(map.width, Math.ceil((camera.x + LOGICAL_WIDTH) / TILE) + 1);
-      const startY = Math.max(0, Math.floor(camera.y / TILE));
-      const endY = Math.min(map.height, Math.ceil((camera.y + LOGICAL_HEIGHT) / TILE) + 1);
-      for (let y = startY; y < endY; y += 1) {
-        for (let x = startX; x < endX; x += 1) {
-          drawImage(TILE_ASSET[map.tiles[y][x]], x * TILE - camera.x, y * TILE - camera.y, TILE, TILE);
+
+      if (outdoor) {
+        context.save();
+        context.strokeStyle = "rgba(219, 244, 231, .15)";
+        context.lineWidth = 2;
+        for (let index = 0; index < 4; index += 1) {
+          const waveY = 118 + index * 116 + Math.sin(now / 760 + index) * 5;
+          context.beginPath();
+          context.moveTo(-24, waveY);
+          context.bezierCurveTo(220, waveY - 10, 438, waveY + 12, 700, waveY - 2);
+          context.bezierCurveTo(830, waveY - 8, 940, waveY + 7, LOGICAL_WIDTH + 24, waveY);
+          context.stroke();
         }
+        context.restore();
       }
 
-      type DrawEntry = { y: number; draw: () => void };
+      const toScreen = (point: { x: number; y: number }) => ({
+        x: Math.round(point.x - camera.x),
+        y: Math.round(point.y + fieldTopMargin - camera.y),
+      });
+      const islandInset = save.map === "village" ? 1 : 0;
+      const islandNorth = toScreen(projectMinaPixelFieldPoint(islandInset, islandInset));
+      const islandEast = toScreen(projectMinaPixelFieldPoint(map.width - islandInset, islandInset));
+      const islandSouth = toScreen(projectMinaPixelFieldPoint(map.width - islandInset, map.height - islandInset));
+      const islandWest = toScreen(projectMinaPixelFieldPoint(islandInset, map.height - islandInset));
+      const edgeDepth = fieldProfile.islandEdgeDepth;
+
+      context.save();
+      context.fillStyle = outdoor
+        ? save.map === "village" ? "#59442f" : "#2c3d2c"
+        : "#0a1513";
+      context.beginPath();
+      context.moveTo(islandWest.x, islandWest.y);
+      context.lineTo(islandSouth.x, islandSouth.y);
+      context.lineTo(islandSouth.x, islandSouth.y + edgeDepth);
+      context.lineTo(islandWest.x, islandWest.y + edgeDepth);
+      context.closePath();
+      context.fill();
+      context.fillStyle = outdoor
+        ? save.map === "village" ? "#755b3b" : "#40543a"
+        : "#14241f";
+      context.beginPath();
+      context.moveTo(islandEast.x, islandEast.y);
+      context.lineTo(islandSouth.x, islandSouth.y);
+      context.lineTo(islandSouth.x, islandSouth.y + edgeDepth);
+      context.lineTo(islandEast.x, islandEast.y + edgeDepth);
+      context.closePath();
+      context.fill();
+      context.fillStyle = outdoor ? "rgba(22, 55, 38, .52)" : "rgba(2, 12, 10, .78)";
+      context.beginPath();
+      context.moveTo(islandNorth.x, islandNorth.y);
+      context.lineTo(islandEast.x, islandEast.y);
+      context.lineTo(islandSouth.x, islandSouth.y);
+      context.lineTo(islandWest.x, islandWest.y);
+      context.closePath();
+      context.fill();
+      context.strokeStyle = outdoor ? "rgba(239, 226, 177, .45)" : "rgba(126, 167, 145, .24)";
+      context.lineWidth = 2;
+      context.stroke();
+      context.restore();
+
+      context.save();
+      context.translate(-camera.x, fieldTopMargin - camera.y);
+      context.transform(.5, .25, -.5, .25, 0, 0);
+      for (let y = 0; y < map.height; y += 1) {
+        for (let x = 0; x < map.width; x += 1) {
+          if (save.map === "village" && (x === 0 || y === 0 || x === map.width - 1 || y === map.height - 1)) continue;
+          const tileOrigin = projectMinaPixelFieldPoint(x, y);
+          const tileLeft = tileOrigin.x - fieldProfile.tileWidth / 2 - camera.x;
+          const tileRight = tileOrigin.x + fieldProfile.tileWidth / 2 - camera.x;
+          const tileTop = tileOrigin.y + fieldTopMargin - camera.y;
+          const tileBottom = tileTop + fieldProfile.tileDepth;
+          if (tileRight < -TILE || tileLeft > LOGICAL_WIDTH + TILE
+            || tileBottom < -TILE || tileTop > LOGICAL_HEIGHT + TILE) continue;
+          const image = imagesRef.current[TILE_ASSET[map.tiles[y][x]]];
+          if (image) {
+            context.drawImage(
+              image,
+              x * fieldProfile.tileWidth,
+              y * fieldProfile.tileWidth,
+              fieldProfile.tileWidth,
+              fieldProfile.tileWidth,
+            );
+          }
+        }
+      }
+      context.restore();
+
+      type DrawEntry = { y: number; order: number; draw: () => void };
       const entries: DrawEntry[] = [];
+      let drawOrder = 0;
       map.props.forEach((prop) => {
         if (save.chests.includes(prop.id) && prop.asset === "propChest") return;
         if (save.collected.includes(prop.id) && prop.id.startsWith("acorn")) return;
-        const left = prop.x * TILE + TILE / 2 - prop.width / 2 - camera.x;
-        const top = (prop.y + 1) * TILE - prop.height - camera.y;
+        const foot = projectedFoot(prop.x, prop.y);
+        const footX = Math.round(foot.x - camera.x);
+        const footY = Math.round(foot.y - camera.y);
+        const left = Math.round(footX - prop.width / 2);
+        const top = Math.round(footY - prop.height);
         if (!visibleRect(left, top, prop.width, prop.height)) return;
         entries.push({
-          y: (prop.y + 1) * TILE,
-          draw: () => drawImage(prop.asset, left, top, prop.width, prop.height),
+          y: foot.y,
+          order: drawOrder++,
+          draw: () => {
+            drawFootShadow(footX, footY, prop.width, prop.asset === "propLantern" ? .16 : .22);
+            drawImage(prop.asset, left, top, prop.width, prop.height);
+          },
         });
       });
       map.npcs.forEach((npc) => {
-        const left = npc.x * TILE + (TILE - ACTOR_WIDTH) / 2 - camera.x;
-        const top = (npc.y + 1) * TILE - ACTOR_HEIGHT - camera.y;
+        const foot = projectedFoot(npc.x, npc.y);
+        const footX = Math.round(foot.x - camera.x);
+        const footY = Math.round(foot.y - camera.y);
+        const left = Math.round(footX - ACTOR_WIDTH / 2);
+        const top = Math.round(footY - ACTOR_HEIGHT);
         if (!visibleRect(left, top, ACTOR_WIDTH, ACTOR_HEIGHT)) return;
         entries.push({
-          y: (npc.y + 1) * TILE,
-          draw: () => drawImage(npc.asset, left, top, ACTOR_WIDTH, ACTOR_HEIGHT),
+          y: foot.y,
+          order: drawOrder++,
+          draw: () => {
+            drawFootShadow(footX, footY, ACTOR_WIDTH);
+            drawImage(npc.asset, left, top, ACTOR_WIDTH, ACTOR_HEIGHT);
+          },
         });
       });
-      const minaLeft = position.x * TILE + (TILE - ACTOR_WIDTH) / 2 - camera.x;
-      const minaTop = (position.y + 1) * TILE - ACTOR_HEIGHT - camera.y - position.bob;
+      const minaFoot = projectedFoot(position.x, position.y);
+      const minaFootX = Math.round(minaFoot.x - camera.x);
+      const minaFootY = Math.round(minaFoot.y - camera.y);
+      const minaLeft = Math.round(minaFootX - ACTOR_WIDTH / 2);
+      const minaTop = Math.round(minaFootY - ACTOR_HEIGHT - position.bob);
       entries.push({
-        y: (position.y + 1) * TILE + 1,
-        draw: () => drawImage(MINA_ASSET[save.direction], minaLeft, minaTop, ACTOR_WIDTH, ACTOR_HEIGHT),
+        y: minaFoot.y + 1,
+        order: drawOrder++,
+        draw: () => {
+          drawFootShadow(minaFootX, minaFootY, ACTOR_WIDTH, .3);
+          drawImage(MINA_ASSET[save.direction], minaLeft, minaTop, ACTOR_WIDTH, ACTOR_HEIGHT);
+        },
       });
-      entries.sort((a, b) => a.y - b.y).forEach((entry) => entry.draw());
+      entries.sort((a, b) => a.y - b.y || a.order - b.order).forEach((entry) => entry.draw());
 
       context.fillStyle = "rgba(4, 21, 18, .88)";
       context.fillRect(12, 12, 344, 46);

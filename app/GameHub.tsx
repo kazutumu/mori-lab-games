@@ -46,7 +46,7 @@ const games = [
   { id: "sailingm1", icon: "✉️", title: "ミナと風待ち島 M1・朝の手紙", description: "三つの風を集め、岩礁を避け、島の桟橋へ朝の手紙を届けるM1向け航海ゲームです。", tag: "M1 MISSION · MORNING LETTER" },
   { id: "brawler2d", icon: "🥊", title: "ミナと夜の研究路", description: "表紙基準のミナと四人の番人が登場する、完全横スクロールのリアル2Dアクションです。", tag: "ILLUSTRATED 2D · SIDE-SCROLL" },
   { id: "rpg3d", icon: "🗝️", title: "ミナと森研究所 第一章・消えた記録", description: "村と森を歩き、記録片を集め、森研究所の扉をひらくM1 iPad基準の小規模3D RPGです。", tag: "M1 3D RPG · CHAPTER 01" },
-  { id: "rpg2d", icon: "🧭", title: "ミナと星苔の方位盤 第一章・北をなくした森", description: "精密な専用ピクセル素材を64px地形へ全面展開。灯枝村から森研究所地下まで旅する見下ろし型2D JRPGです。", tag: "M1 PIXEL JRPG · CHAPTER 01" },
+  { id: "rpg2d", icon: "🧭", title: "ミナと星苔の方位盤 第一章・北をなくした森", description: "海に浮かぶ一島を斜め見下ろしで描く、直立ピクセル人物の2DジオラマJRPG。灯枝村から森研究所地下まで、島をひと続きに旅します。", tag: "M1 PIXEL JRPG · CHAPTER 01" },
   { id: "diorama3d", icon: "🌀", title: "ミナと風綴りの丘 第一章・眠る風車", description: "風綴り村、風鈴丘、森研究所の分室を巡り、眠る風車へ風を取り戻す完全オリジナル3DジオラマRPGです。", tag: "M1 3D DIORAMA RPG · CHAPTER 01" },
 ] as const;
 

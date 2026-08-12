@@ -58,6 +58,36 @@ test("native-detail render profile keeps the authored pixel art legible", () => 
   assert.equal(game.MINA_PIXEL_RENDER_PROFILE.height / game.MINA_PIXEL_RENDER_PROFILE.tile, 9);
 });
 
+test("isometric field projection keeps the 64 by 32 diamond rhythm deterministic", () => {
+  assert.deepEqual(game.MINA_PIXEL_FIELD_PROFILE, {
+    tileWidth: 64,
+    tileDepth: 32,
+    rowSkew: -32,
+    islandEdgeDepth: 28,
+    mode: "isometric-diorama",
+  });
+  for (const [x, y] of [[0, 0], [1, 0], [0, 1], [7, 11], [29, 21]]) {
+    assert.deepEqual(game.projectMinaPixelFieldPoint(x, y), {
+      x: (x - y) * 32,
+      y: (x + y) * 16,
+    });
+  }
+});
+
+test("village buildings and edge decoration preserve the authored walkability", () => {
+  const village = game.createMinaPixelWorldMaps().village;
+  for (const id of ["ito-house", "roku-house", "village-lab"]) {
+    const building = village.props.find((prop) => prop.id === id);
+    assert.ok(building, `${id} must remain in the village diorama`);
+    assert.deepEqual(building.block, { left: 1, right: 1, top: 2, bottom: 0 });
+  }
+
+  assert.equal(village.tiles.flat().filter((tile) => tile === "slateRoof").length, 0, "village buildings must not paint a slate-roof collision patch");
+
+  const edgeDecoration = village.props.filter((prop) => prop.id.startsWith("village-edge-"));
+  assert.equal(edgeDecoration.length, 0, "the removed perimeter props must not float over the village sea frame");
+});
+
 test("battle art stays above the two-row command panel on M1 iPad layouts", () => {
   const layout = game.MINA_PIXEL_BATTLE_LAYOUT;
   const commandPanelHeight = 104;

@@ -50,6 +50,19 @@
 - `git diff --check` 成功。
 - 入口、進行順、室内出口経由、8方位、距離、既存v1セーブ非破壊を `tests/diorama3d-logic.test.mjs` で検査済み。
 
+## 定期点検記録
+
+### 2026年8月29日
+
+- `main` と `origin/main` は同期済みで、点検開始時の作業ツリーはclean。
+- 公開先はHTTP 200を確認。
+- `vinext build`、ESLint、全24テストに成功。既存v1セーブ非破壊テストも継続して通過。
+- 研究員の明示承認を受け、既存12カードを保ったまま「すべて・軽量・3D・RPG」で絞れる初めての入口を追加。
+- ゲーム一覧の後ろに、公開中のミナシリーズサイト `https://kazutumu.github.io/mina-series-site/` への控えめな相互案内を1か所追加。リンク先のHTTP 200を確認。
+- カード本文、ゲーム本文、操作、セーブ形式は変更していない。`mori-lab-games-v1`、`mori-lab-jrpg-ch1-v1`、`mori-lab-diorama-rpg-ch1-v1` を維持。
+- `vinext build`、ESLint、全24テスト、`git diff --check` に成功。入口分類と相互案内の回帰検査を `tests/rendered-html.test.mjs` へ追加。
+- 公開先: https://mori-lab-games.kazutumu0.chatgpt.site/
+
 ## 運用上の注意
 
 - 大きな変更や新作は一つずつ作り、テスト後に公開する。

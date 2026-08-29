@@ -55,6 +55,16 @@ const restingGames = [
   { icon: "🔴", title: "ちょっとだけボタン", note: "遊び方を研究し直すため休眠中" },
 ];
 
+type GameId = (typeof games)[number]["id"];
+type EntryGroupId = "all" | "light" | "threeD" | "rpg";
+
+const entryGroups: readonly { id: EntryGroupId; label: string; note: string; gameIds: readonly GameId[] }[] = [
+  { id: "all", label: "すべて", note: "12作品から選ぶ", gameIds: games.map((game) => game.id) },
+  { id: "light", label: "軽量", note: "すぐ遊べる6作品", gameIds: ["explore", "chair", "quiz", "idle", "clockwork", "sailing"] },
+  { id: "threeD", label: "3D", note: "立体世界の4作品", gameIds: ["sailing3d", "sailingm1", "rpg3d", "diorama3d"] },
+  { id: "rpg", label: "RPG", note: "物語を旅する3作品", gameIds: ["rpg3d", "rpg2d", "diorama3d"] },
+] as const;
+
 const novelNodes: Record<string, { text: string; choices?: { label: string; next: string }[]; ending?: string }> = {
   start: {
     text: "森の入口で、ミナは風が二つの方向から来るのを感じました。片方は草のにおい、もう片方は遠い水の音を運んでいます。",
@@ -202,6 +212,9 @@ export default function GameHub() {
 function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void }) {
   const stage = treeStage(save.treePoints);
   const next = treeStages[stage + 1];
+  const [entryGroup, setEntryGroup] = useState<EntryGroupId>("all");
+  const selectedEntryGroup = entryGroups.find((group) => group.id === entryGroup) ?? entryGroups[0];
+  const visibleGames = games.filter((game) => selectedEntryGroup.gameIds.includes(game.id));
   return (
     <section className="home-view">
       <div className="hero">
@@ -218,8 +231,19 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
       </div>
 
       <div className="section-heading"><span>GAME ENTRANCES</span><h2>今日は、どの枝へ？</h2></div>
-      <div className="game-grid">
-        {games.map((game, index) => {
+      <nav className="game-entry-guide" aria-label="初めて遊ぶ人向けのゲーム入口">
+        <div><strong>初めての入口</strong><span>遊びたい形から絞れます。いつでも「すべて」へ戻せます。</span></div>
+        <div className="game-entry-tabs" role="group" aria-label="ゲームの種類">
+          {entryGroups.map((group) => (
+            <button key={group.id} type="button" aria-pressed={entryGroup === group.id} aria-controls="game-entrances" onClick={() => setEntryGroup(group.id)}>
+              <strong>{group.label}</strong><small>{group.note}</small>
+            </button>
+          ))}
+        </div>
+      </nav>
+      <div className="game-grid" id="game-entrances" aria-live="polite">
+        {visibleGames.map((game) => {
+          const index = games.findIndex((candidate) => candidate.id === game.id);
           const cleared = save.clears.some((id) => id === game.id || id.startsWith(`${game.id}-`) || (game.id === "idle" && id === "idle-goal"));
           return (
             <button className="game-card" data-game-id={game.id} key={game.id} onClick={() => openGame(game.id)}>
@@ -233,6 +257,10 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
       </div>
       <div className="resting-section"><span>研究温室 · 休眠中</span>{restingGames.map((game) => <div key={game.title}><b>{game.icon}</b><strong>{game.title}</strong><small>{game.note}</small></div>)}</div>
       <aside className="notice"><strong>研究員へ</strong><p>クリアすると木が育ちます。ただし木を一晩で森にしようとする行為は、保護担当の観察対象です。</p><span>🦄 椅子、あります。</span></aside>
+      <aside className="mori-branch-link" aria-label="森研究所の公開作品への案内">
+        <div><small>GAME ARCHIVEの外へ</small><strong>ゲームの向こうにある、ミナの本棚。</strong><p>公開中の物語や研究ノートを、ミナシリーズサイトで静かにたどれます。</p></div>
+        <a href="https://kazutumu.github.io/mina-series-site/" target="_blank" rel="noreferrer">ミナシリーズの公開本棚を見る <span aria-hidden="true">↗</span></a>
+      </aside>
     </section>
   );
 }

@@ -174,6 +174,16 @@ test("renders the Mori Lab game collection", async () => {
   const gameIds = [...gamesBlock[1].matchAll(/id:\s*"([^"]+)"/g)].map((match) => match[1]);
   assert.equal(gameIds.length, 12);
   assert.equal(gameIds.at(-1), "diorama3d");
+  assert.match(source, /const entryGroups:[^=]+ = \[/);
+  assert.match(source, /id: "light"[^\n]*すぐ遊べる6作品/);
+  assert.match(source, /id: "threeD"[^\n]*立体世界の4作品/);
+  assert.match(source, /id: "rpg"[^\n]*物語を旅する3作品/);
+  assert.match(source, /aria-label="初めて遊ぶ人向けのゲーム入口"/);
+  assert.match(source, /aria-pressed=\{entryGroup === group\.id\}/);
+  assert.match(source, /const visibleGames = games\.filter/);
+  assert.match(source, /href="https:\/\/kazutumu\.github\.io\/mina-series-site\/"/);
+  assert.match(source, /target="_blank" rel="noreferrer"/);
+  assert.match(source, /ミナシリーズの公開本棚を見る/);
   assert.match(source, /lazy\(\(\) => import\("\.\/MinaPixelRPGGame"\)\)/);
   assert.match(source, /type Mode = [^;]*"rpg2d"/);
   assert.match(source, /mode === "rpg2d"/);

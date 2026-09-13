@@ -24,6 +24,10 @@ test("renders the Mori Lab game collection", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 
   const source = await readFile(new URL("../app/GameHub.tsx", import.meta.url), "utf8");
+  assert.match(source, /<Link className="plaza-entry" id="plaza-entry" href="\/mina-plaza">/);
+  assert.match(source, /ミナと木陰の広場/);
+  assert.match(source, /セーブなし · 木の成長とは別の試作/);
+  assert.ok(source.indexOf('id="plaza-entry"') < source.indexOf('<nav className="game-entry-guide"'), "plaza entry stays above the game filters");
   const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");
   const sailingm1 = await readFile(new URL("../app/SailingM1Game.tsx", import.meta.url), "utf8");
   const brawler2d = await readFile(new URL("../app/Brawler2DGame.tsx", import.meta.url), "utf8");

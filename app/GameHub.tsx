@@ -234,6 +234,11 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
       </div>
 
       <div className="section-heading"><span>GAME ENTRANCES</span><h2>今日は、どの枝へ？</h2></div>
+      <Link className="plaza-entry" id="plaza-entry" href="/mina-plaza">
+        <span className="plaza-entry-icon" aria-hidden="true">🌿</span>
+        <span className="plaza-entry-copy"><small>公開中の操作試作 · 3Dの広場</small><strong>ミナと木陰の広場</strong><span>左スティックで歩き、茶房から木陰へお茶を届ける、小さな3D散歩。</span><em>セーブなし · 木の成長とは別の試作</em></span>
+        <span className="plaza-entry-action">広場で遊ぶ →</span>
+      </Link>
       <nav className="game-entry-guide" aria-label="初めて遊ぶ人向けのゲーム入口">
         <div><strong>初めての入口</strong><span>遊びたい形から絞れます。いつでも「すべて」へ戻せます。</span></div>
         <div className="game-entry-tabs" role="group" aria-label="ゲームの種類">

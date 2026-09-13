@@ -1,6 +1,7 @@
 "use client";
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 
 const Sailing3DGame = lazy(() => import("./Sailing3DGame"));
 const SailingM1Game = lazy(() => import("./SailingM1Game"));
@@ -246,12 +247,20 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
           const index = games.findIndex((candidate) => candidate.id === game.id);
           const cleared = save.clears.some((id) => id === game.id || id.startsWith(`${game.id}-`) || (game.id === "idle" && id === "idle-goal"));
           return (
-            <button className="game-card" data-game-id={game.id} key={game.id} onClick={() => openGame(game.id)}>
-              <span className="card-number">{String(index + 1).padStart(2, "0")}</span>
-              <span className="card-icon">{game.icon}</span>
-              <span className="card-copy"><small>{game.tag}</small><strong>{game.title}</strong><p>{game.description}</p></span>
-              <span className={cleared ? "card-state cleared" : "card-state"}>{cleared ? "観察済み ✓" : "入口をひらく →"}</span>
-            </button>
+            <div className="game-card-entry" key={game.id}>
+              <button className="game-card" data-game-id={game.id} onClick={() => openGame(game.id)}>
+                <span className="card-number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="card-icon">{game.icon}</span>
+                <span className="card-copy"><small>{game.tag}</small><strong>{game.title}</strong><p>{game.description}</p></span>
+                <span className={cleared ? "card-state cleared" : "card-state"}>{cleared ? "観察済み ✓" : game.id === "diorama3d" ? "通常版をひらく →" : "入口をひらく →"}</span>
+              </button>
+              {game.id === "diorama3d" && (
+                <Link className="game-study-link" href="/windmill-study">
+                  <strong>Astra版で遊ぶ →</strong>
+                  <span>描画を比較できます · 通常版とは別セーブ</span>
+                </Link>
+              )}
+            </div>
           );
         })}
       </div>

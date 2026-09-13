@@ -181,6 +181,10 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(source, /aria-label="初めて遊ぶ人向けのゲーム入口"/);
   assert.match(source, /aria-pressed=\{entryGroup === group\.id\}/);
   assert.match(source, /const visibleGames = games\.filter/);
+  assert.match(source, /game\.id === "diorama3d" && \(\s*<Link className="game-study-link" href="\/windmill-study">/);
+  assert.match(source, /Astra版で遊ぶ/);
+  assert.match(source, /通常版とは別セーブ/);
+  assert.match(source, /通常版をひらく/);
   assert.match(source, /href="https:\/\/kazutumu\.github\.io\/mina-series-site\/"/);
   assert.match(source, /target="_blank" rel="noreferrer"/);
   assert.match(source, /ミナシリーズの公開本棚を見る/);

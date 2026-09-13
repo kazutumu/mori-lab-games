@@ -17,6 +17,23 @@ after(async () => {
   await vite.close();
 });
 
+test("comparison study isolates saves and keeps the original storage key", () => {
+  assert.equal(game.dioramaStorageKey(false), "mori-lab-diorama-rpg-ch1-v1");
+  assert.equal(game.dioramaStorageKey(true), "mori-lab-diorama-rpg-astra-preview-v1");
+  assert.notEqual(game.dioramaStorageKey(true), game.dioramaStorageKey(false));
+});
+
+test("study movement follows the screen without speeding up diagonals", () => {
+  for (const [x,z] of [[0,1],[1,0],[1,1],[-1,1],[-1,-1]]) {
+    const next = game.dioramaMovementVector(x,z,true);
+    assert.ok(Math.abs(Math.hypot(next.x,next.z)-1)<1e-8);
+  }
+  assert.deepEqual(game.dioramaMovementVector(0,0,true),{x:0,z:0});
+  assert.deepEqual(game.dioramaMovementVector(1,0,false),{x:1,z:0});
+  const up = game.dioramaMovementVector(0,-1,true);
+  assert.ok(Math.abs(up.x*20.5-up.z*12)<1e-8, "screen up has no horizontal screen component");
+});
+
 test("defines six bounded diorama zones with valid spawns and deterministic overlap precedence", () => {
   const zones = game.createDioramaMapPlan();
   assert.deepEqual(zones.map((zone) => zone.id), ["village", "hill", "annex", "cellar", "shop", "inn"]);

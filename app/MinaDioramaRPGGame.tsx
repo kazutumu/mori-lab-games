@@ -8,8 +8,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import * as THREE from "three";
+import { createAstraScenery } from "./astraScenery";
 
-type Props = { onClear: () => void };
+type Props = { onClear: () => void; edition?: "classic" | "astra"; preview?: boolean };
 type Direction = "up" | "down" | "left" | "right";
 type ZoneId = "village" | "hill" | "annex" | "cellar" | "shop" | "inn";
 type ItemKey = "herb" | "dew" | "wakeLeaf" | "returnRibbon";
@@ -167,6 +168,17 @@ type BattleRuntime = {
 };
 
 const SAVE_KEY = "mori-lab-diorama-rpg-ch1-v1";
+export const DIORAMA_PREVIEW_SAVE_KEY = "mori-lab-diorama-rpg-astra-preview-v1";
+export function dioramaStorageKey(preview: boolean) { return preview ? DIORAMA_PREVIEW_SAVE_KEY : SAVE_KEY; }
+export function dioramaMovementVector(x: number, z: number, screenRelative: boolean) {
+  const length = Math.hypot(x, z) || 1;
+  const cameraLength = Math.hypot(12, 20.5);
+  const rightX = 20.5 / cameraLength;
+  const rightZ = -12 / cameraLength;
+  return screenRelative
+    ? { x: (x * rightX - z * rightZ) / length, z: (x * rightZ + z * rightX) / length }
+    : { x: x / length, z: z / length };
+}
 const START = { x: 0, z: 32 };
 const ROOM_EXIT_RESCUES: ReadonlyArray<{
   zone: Extract<ZoneId, "annex" | "cellar" | "shop" | "inn">;
@@ -787,7 +799,11 @@ function createChest(shared: Record<string, THREE.Material>) {
   return node;
 }
 
-export default function MinaDioramaRPGGame({ onClear }: Props) {
+export default function MinaDioramaRPGGame({ onClear, edition = "classic", preview = false }: Props) {
+  const astra = edition === "astra";
+  const overviewRef = useRef(false);
+  const [overview, setOverview] = useState(false);
+  const [nearby, setNearby] = useState("");
   const mountRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<Record<Direction, boolean>>({ up: false, down: false, left: false, right: false });
   const onClearRef = useRef(onClear);
@@ -834,6 +850,12 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
 
   useEffect(() => { onClearRef.current = onClear; }, [onClear]);
 
+  const toggleOverview = useCallback(() => {
+    overviewRef.current = !overviewRef.current;
+    setOverview(overviewRef.current);
+    inputRef.current = { up: false, down: false, left: false, right: false };
+  }, []);
+
   const setDirection = useCallback((direction: Direction, active: boolean, event: ReactPointerEvent<HTMLButtonElement>) => {
     if (active) {
       event.preventDefault();
@@ -847,9 +869,10 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
   useEffect(() => {
     const host = mountRef.current;
     if (!host) return;
+    const storageKey = dioramaStorageKey(preview);
     let save = freshMinaDioramaSave();
     try {
-      const raw = window.localStorage.getItem(SAVE_KEY);
+      const raw = window.localStorage.getItem(storageKey);
       if (raw) save = validateMinaDioramaSave(JSON.parse(raw) as unknown);
     } catch {
       save = freshMinaDioramaSave();
@@ -858,7 +881,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     if (recoveredOnLoad.x !== save.position.x || recoveredOnLoad.z !== save.position.z) {
       save.position = recoveredOnLoad;
       try {
-        window.localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+        window.localStorage.setItem(storageKey, JSON.stringify(save));
       } catch { /* The recovered in-memory save remains playable if storage is unavailable. */ }
     }
 
@@ -883,11 +906,13 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x9fbca7);
-    scene.fog = new THREE.FogExp2(0x9fbca7, .012);
+    scene.background = new THREE.Color(astra ? 0xa9c8cb : 0x9fbca7);
+    scene.fog = new THREE.FogExp2(astra ? 0xa9c8cb : 0x9fbca7, astra ? .0025 : .012);
     const camera = new THREE.PerspectiveCamera(48, 1, .1, 90);
+    if (astra) { camera.fov = 38; camera.far = 340; }
     scene.add(new THREE.HemisphereLight(0xe9f0ce, 0x273b31, 2.45));
     const sun = new THREE.DirectionalLight(0xffe4ac, 3.55);
+    if (astra) { sun.color.set(0xffdfa0); sun.intensity = 3.1; renderer.toneMappingExposure = 1.12; }
     sun.position.set(-12, 22, 12);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -960,6 +985,12 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     loadOptional("/game-assets/diorama-rpg-ch1/texture-path-v1.jpg", "path");
     loadOptional("/game-assets/diorama-rpg-ch1/texture-stone-v1.jpg", "stone");
     loadOptional("/game-assets/diorama-rpg-ch1/texture-roof-v1.jpg", "roof");
+    if (astra) {
+      (shared.hill as THREE.MeshStandardMaterial).color.set(0x80a871);
+      (shared.roof as THREE.MeshStandardMaterial).color.set(0x468d8c);
+      (shared.wall as THREE.MeshStandardMaterial).color.set(0xf5dfb4);
+    }
+    const astraScenery = astra ? createAstraScenery(scene) : null;
 
     const blockers: Array<{ x: number; z: number; r: number }> = [];
     const addGround = (zone: DioramaZonePlan, groundMaterial: THREE.Material) => {
@@ -1008,6 +1039,20 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     windmill.lod.rotation.y = Math.PI;
     scene.add(windmill.lod);
     blockers.push({ x: 6, z: -12, r: 2.25 });
+    // A distant windmill must retain its sails in the panorama.
+    if (astra) windmill.lod.levels[1].distance = Infinity;
+    const occludingHouses = astra ? [shopHouse, innHouse, hall, annexExterior] : [];
+    const houseMaterials = occludingHouses.map(house => {
+      const materials: THREE.Material[] = [];
+      house.traverse(node => {
+        if (!(node instanceof THREE.Mesh)) return;
+        const source = Array.isArray(node.material) ? node.material : [node.material];
+        const copies = source.map(m => { const copy = m.clone(); copy.transparent = true; materials.push(copy); return copy; });
+        node.material = Array.isArray(node.material) ? copies : copies[0];
+      });
+      return materials;
+    });
+    const sightline = new THREE.Raycaster();
 
     const makeRoom = (centerX: number, centerZ: number, width: number, depth: number, cellar = false) => {
       const addWallLine = (x1: number, z1: number, x2: number, z2: number) => {
@@ -1258,6 +1303,16 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       scene.add(marker);
     });
 
+    // Interior sets occupy separate coordinates; do not expose those sets at sea.
+    const interiorSets = new THREE.Group();
+    if (astra) {
+      [...scene.children].forEach(object => {
+        if (object === mina || object === towaFollower || object === suiFollower || object instanceof THREE.Light) return;
+        if (Math.abs(object.position.x) > 26) interiorSets.add(object);
+      });
+      scene.add(interiorSets);
+    }
+
     let battleRuntime: BattleRuntime | null = null;
     let menuIsOpen = false;
     let shopIsOpen = false;
@@ -1271,6 +1326,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     let animationFrame = 0;
     let battleTimer: number | null = null;
     let statusTimer: number | null = null;
+    let queuedKeyStep: Direction | null = null;
 
     const currentZone = () => MAP_PLAN.find((zone) => zone.id === dioramaZoneAt(mina.position.x, mina.position.z)) ?? MAP_PLAN[0];
     const playerStats = () => combatStats(save);
@@ -1292,7 +1348,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     const writeSave = (label?: string) => {
       save = snapshotSave();
       try {
-        window.localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+        window.localStorage.setItem(storageKey, JSON.stringify(save));
         if (label) {
           setSaveStatus(label);
           if (statusTimer !== null) window.clearTimeout(statusTimer);
@@ -1325,12 +1381,14 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     };
     const showDialogue = (name: string, text: string) => {
       inputRef.current = { up: false, down: false, left: false, right: false };
+      queuedKeyStep = null;
       dialogueIsOpen = true;
       setDialogue({ name, text });
     };
     const closeDialogue = () => {
       dialogueIsOpen = false;
       setDialogue(null);
+      if (astra) setMessage(dioramaObjective(save));
     };
     const setBattleFromRuntime = () => {
       if (!battleRuntime) { setBattle(null); return; }
@@ -1361,7 +1419,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       suiFollower.position.set(safeSpawn.x + 1, 0, safeSpawn.z + 2.1);
       save.position = { ...safeSpawn };
       try {
-        window.localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+        window.localStorage.setItem(storageKey, JSON.stringify(save));
       } catch { /* The recovered in-memory save remains playable if storage is unavailable. */ }
     }
     const teleport = (x: number, z: number) => {
@@ -1754,6 +1812,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
 
     interactRef.current = interact;
     confirmRef.current = () => {
+      if (overviewRef.current) return;
       if (dialogueIsOpen) closeDialogue();
       else if (battleRuntime?.phase === "player" && battleRuntime.menu === "root") battleCommandRef.current("attack");
       else if (battleRuntime?.phase === "player" && battleRuntime.menu === "skill") battleCommandRef.current("breeze");
@@ -1775,6 +1834,9 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
 
     const keyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+      if (astra && !event.repeat && !dialogueIsOpen && !menuIsOpen && !shopIsOpen && !battleRuntime && !overviewRef.current) {
+        queuedKeyStep = key === "w" || key === "arrowup" ? "up" : key === "s" || key === "arrowdown" ? "down" : key === "a" || key === "arrowleft" ? "left" : key === "d" || key === "arrowright" ? "right" : queuedKeyStep;
+      }
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) event.preventDefault();
       if (key === "w" || key === "arrowup") inputRef.current.up = true;
       else if (key === "s" || key === "arrowdown") inputRef.current.down = true;
@@ -1791,7 +1853,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       else if (key === "a" || key === "arrowleft") inputRef.current.left = false;
       else if (key === "d" || key === "arrowright") inputRef.current.right = false;
     };
-    const stopInput = () => { inputRef.current = { up: false, down: false, left: false, right: false }; };
+    const stopInput = () => { inputRef.current = { up: false, down: false, left: false, right: false }; queuedKeyStep = null; };
     window.addEventListener("keydown", keyDown, { passive: false });
     window.addEventListener("keyup", keyUp);
     window.addEventListener("blur", stopInput);
@@ -1868,18 +1930,28 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       elapsed += delta;
       save.playSeconds += delta;
       let moving = false;
-      if (!dialogueIsOpen && !menuIsOpen && !shopIsOpen && !battleRuntime) {
-        const x = (inputRef.current.right ? 1 : 0) - (inputRef.current.left ? 1 : 0);
-        const z = (inputRef.current.down ? 1 : 0) - (inputRef.current.up ? 1 : 0);
-        const direction = new THREE.Vector3(x, 0, z);
+      if (!dialogueIsOpen && !menuIsOpen && !shopIsOpen && !battleRuntime && !overviewRef.current) {
+        let x = (inputRef.current.right ? 1 : 0) - (inputRef.current.left ? 1 : 0);
+        let z = (inputRef.current.down ? 1 : 0) - (inputRef.current.up ? 1 : 0);
+        // A quick key tap must still take one small step even between frames.
+        const tap = queuedKeyStep;
+        queuedKeyStep = null;
+        if (!x && !z && tap) {
+          x = tap === "right" ? 1 : tap === "left" ? -1 : 0;
+          z = tap === "down" ? 1 : tap === "up" ? -1 : 0;
+        }
+        // In the study, arrows follow the screen rather than the rotated world.
+        const input = dioramaMovementVector(x, z, astra);
+        const direction = new THREE.Vector3(input.x, 0, input.z);
         if (direction.lengthSq() > 0) {
           direction.normalize();
           moving = true;
           yaw = Math.atan2(direction.x, -direction.z);
           mina.rotation.y = yaw;
           const speed = 4.25;
-          const nextX = mina.position.x + direction.x * speed * delta;
-          const nextZ = mina.position.z + direction.z * speed * delta;
+          const movementDelta = tap ? Math.max(delta, .075) : delta;
+          const nextX = mina.position.x + direction.x * speed * movementDelta;
+          const nextZ = mina.position.z + direction.z * speed * movementDelta;
           if (walkable(nextX, mina.position.z)) mina.position.x = nextX;
           if (walkable(mina.position.x, nextZ)) mina.position.z = nextZ;
           const roomExitId = dioramaRoomExitAt(mina.position.x, mina.position.z);
@@ -1926,21 +1998,50 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       else windmill.sails.rotation.z += delta * .72;
       saveGem.rotation.y += delta * 1.2;
       saveGem.position.y = .88 + Math.sin(elapsed * 2.2) * .08;
-      updateEnemies(now, delta);
+      if (!overviewRef.current) updateEnemies(now, delta);
 
       const cameraFocus = battleRuntime ? battleRuntime.anchor.clone().setY(1) : mina.position.clone().setY(1.05);
       const desiredCamera = battleRuntime
         ? new THREE.Vector3(cameraFocus.x + 7.8, 7.2, cameraFocus.z + 9.2)
         : new THREE.Vector3(mina.position.x + 7.7, 8.5, mina.position.z + 9.4);
+      if (astra && !battleRuntime) {
+        if (overviewRef.current && ["village", "hill"].includes(currentZone().id)) {
+          cameraFocus.set(0, 0, 12);
+          const panoramaScale = Math.max(1.1, 1.15 / camera.aspect);
+          desiredCamera.set(37 * panoramaScale, 53 * panoramaScale, 12 + 57 * panoramaScale);
+        } else {
+          cameraFocus.z -= 2.5;
+          desiredCamera.set(mina.position.x + 12, 15.5, mina.position.z + 18);
+        }
+      }
       camera.position.lerp(desiredCamera, 1 - Math.pow(.001, delta));
       camera.lookAt(cameraFocus);
       sun.position.set(cameraFocus.x - 12, 22, cameraFocus.z + 12);
       sun.target.position.copy(cameraFocus);
       windmill.lod.update(camera);
+      if (astraScenery) {
+        const target = dioramaNextDestination(save, { x: mina.position.x, z: mina.position.z });
+        const outdoors = ["village", "hill"].includes(currentZone().id);
+        astraScenery.update(elapsed, target, outdoors);
+        interiorSets.visible = !outdoors;
+      }
 
       if (now - lastHud > 150) {
         lastHud = now;
         updateHud();
+        if (astra) {
+          const npc = npcs.filter(n => n.node.visible && n.node.position.distanceTo(mina.position) < 2.3).sort((a,b)=>a.node.position.distanceTo(mina.position)-b.node.position.distanceTo(mina.position))[0];
+          const portal = portals.filter(p => Math.hypot(p.x-mina.position.x,p.z-mina.position.z)<1.75).sort((a,b)=>Math.hypot(a.x-mina.position.x,a.z-mina.position.z)-Math.hypot(b.x-mina.position.x,b.z-mina.position.z))[0];
+          const item = collectibles.filter(c=>c.node.visible && c.node.position.distanceTo(mina.position)<1.9).sort((a,b)=>a.node.position.distanceTo(mina.position)-b.node.position.distanceTo(mina.position))[0];
+          setNearby(portal ? portal.label : item ? `${item.kind === "chest" ? "宝箱" : item.label}を調べる` : npc ? `${npc.name}に話す` : "");
+          const head = mina.position.clone().setY(1.4);
+          sightline.set(camera.position, head.clone().sub(camera.position).normalize());
+          sightline.far = camera.position.distanceTo(head) - .4;
+          occludingHouses.forEach((house, i) => {
+            const obscures = !overviewRef.current && sightline.intersectObject(house, true).length > 0;
+            houseMaterials[i].forEach(m => { m.opacity = obscures ? .18 : 1; m.depthWrite = !obscures; });
+          });
+        }
       }
       if (now - lastAutoSave > 14000) {
         lastAutoSave = now;
@@ -1969,7 +2070,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
     updateHud();
     const readyTimer = window.setTimeout(() => {
       setLoading(false);
-      setMessage(save.completed ? "第一章クリア済みです。丘と風車を自由に観測できます。" : "イオ主任に話しかけ、眠る風車の調査を始めましょう。");
+      setMessage(save.completed ? "第一章クリア済みです。丘と風車を自由に観測できます。" : astra ? dioramaObjective(save) : "イオ主任に話しかけ、眠る風車の調査を始めましょう。");
     }, 0);
     animationFrame = window.requestAnimationFrame(loop);
 
@@ -2018,7 +2119,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
       renderer.forceContextLoss();
       if (renderer.domElement.parentElement === host) host.removeChild(renderer.domElement);
     };
-  }, []);
+  }, [astra, preview]);
 
   const hpPercent = hud.maxHp ? hud.hp / hud.maxHp * 100 : 0;
   const spPercent = hud.maxSp ? hud.sp / hud.maxSp * 100 : 0;
@@ -2026,7 +2127,7 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
   const time = `${Math.floor(hud.playSeconds / 3600)}:${String(Math.floor(hud.playSeconds / 60) % 60).padStart(2, "0")}`;
 
   return (
-    <section className="diorama-root" aria-label="ミナと風綴りの丘 第一章 眠る風車">
+    <section className={`diorama-root${astra ? " astra-edition" : ""}${overview ? " astra-overview" : ""}`} aria-label="ミナと風綴りの丘 第一章 眠る風車">
       <div className="diorama-stage" ref={mountRef}>
         {loading && <div className="diorama-loading">風綴りの丘を組み立てています…</div>}
         {error && <div className="diorama-error" role="alert"><strong>3D画面を開始できません</strong><p>{error}</p></div>}
@@ -2044,6 +2145,12 @@ export default function MinaDioramaRPGGame({ onClear }: Props) {
           <span>次の場所：{hud.nextDestination.name}　{hud.nextDestination.arrow} {hud.nextDestination.direction}へ約{hud.nextDestination.distance}歩</span>
           <span>風綴り {hud.stitches} / 3</span>
         </div>
+
+        {astra && !dialogue && !battle && !menuOpen && !shopOpen && <>
+          <button className="astra-view" aria-pressed={overview} onClick={toggleOverview}>{overview ? "探索に戻る" : "丘を見渡す"}<span>{overview ? "探索を一時停止中" : "風綴り村と風車"}</span></button>
+          {overview && <div className="astra-overview-caption"><small>風綴りの丘</small><strong>直す前に、なぜ止まったのかを聞く。</strong><span>風綴り村から、眠る風車へ。</span></div>}
+          {!overview && nearby && <button className="astra-nearby" onClick={()=>confirmRef.current()}><kbd>Z</kbd>{nearby}</button>}
+        </>}
 
         {dialogue && (
           <button className="diorama-dialogue" onClick={() => confirmRef.current()} aria-label={`${dialogue.name}との会話を閉じる`}>

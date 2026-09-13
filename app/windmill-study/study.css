@@ -1,0 +1,80 @@
+.wind-study { min-height:100svh; background:#102e32; color:#f1efd9; font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; }
+.study-header { height:82px; display:flex; align-items:center; gap:32px; padding:0 32px; background:#112f32; border-bottom:1px solid #ffffff20; }
+.study-title { display:flex; align-items:baseline; gap:16px; white-space:nowrap; }
+.study-title>span { color:#e6c183; font-family:"Yu Mincho",serif; font-size:22px; letter-spacing:.12em; }
+.study-title h1 { margin:0; font-size:14px; font-weight:400; letter-spacing:.08em; color:#b8cccc; }
+.study-switch { display:flex; gap:3px; padding:4px; border:1px solid #62827e; border-radius:50px; margin-left:auto; }
+.study-switch button { min-height:44px; padding:0 20px; border:0; border-radius:30px; background:transparent; color:#c2d1cd; font-size:14px; cursor:pointer; }
+.study-switch button[aria-pressed=true] { background:#e4cd98; color:#143033; }
+.study-badge { font-size:12px; color:#a6c2bb; }
+.study-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 32px; font-size:12px; color:#afc4bc; }
+.study-footer a { color:#dfcd9f; padding:8px; }
+.wind-study button:focus-visible,.wind-study a:focus-visible { outline:3px solid #ffd383; outline-offset:3px; }
+.wind-study .diorama-root { max-width:none; border:0; box-shadow:none; }
+.astra-edition { position:relative; }
+.astra-edition .diorama-stage { height:calc(100svh - 142px); min-height:600px; max-height:none; background:#95bdc4; }
+.astra-edition .diorama-stage::after { content:""; position:absolute; inset:0; box-shadow:inset 0 -100px 90px -65px #102e32; pointer-events:none; }
+.astra-edition .diorama-hud { top:24px; left:26px; right:26px; grid-template-columns:265px auto; align-items:start; }
+.astra-edition .diorama-party-status { grid-template-columns:42px 1fr; padding:12px; gap:10px; border:1px solid #cfe4d042; border-radius:5px; background:#133b39ed; }
+.astra-edition .diorama-party-status>div:last-child { display:none; }
+.astra-edition .diorama-portrait { width:42px; height:48px; border-radius:3px; border:1px solid #d3bc80; font-size:12px; }
+.astra-edition .diorama-party-status small { font-size:12px; }
+.astra-edition .diorama-party-status span { font-size:12px; color:#d1ded4; }
+.astra-edition .diorama-location { justify-self:end; min-width:0; border:0; background:transparent; box-shadow:none; backdrop-filter:none; text-shadow:0 2px 6px #133d43; }
+.astra-edition .diorama-location strong { font-size:23px; color:#fff6dc; }
+.astra-edition .diorama-location small,.astra-edition .diorama-location span { font-size:12px; color:#fff1d0; }
+.astra-edition .diorama-objective { top:116px; left:26px; width:290px; padding:14px 17px; border-left:2px solid #d8bd7a; background:linear-gradient(90deg,#153933f0,#153933d9); box-shadow:none; }
+.astra-edition .diorama-objective small { font-size:12px; color:#e9cb92; }
+.astra-edition .diorama-objective strong { font-size:16px; line-height:1.6; margin-top:8px; }
+.astra-edition .diorama-objective span { font-size:12px; line-height:1.7; color:#c3d4c8; }
+.astra-view { position:absolute; z-index:18; top:116px; right:26px; min-height:56px; padding:10px 18px; border:1px solid #efe5bc6b; border-radius:4px; color:#f6ebd2; background:#123b3de6; cursor:pointer; font-size:14px; }
+.astra-view span { display:block; font-size:12px; margin-top:5px; color:#adcac1; }
+.astra-overview-caption { position:absolute; left:50%; bottom:135px; transform:translateX(-50%); width:max-content; max-width:80%; text-align:center; z-index:13; text-shadow:0 2px 10px #082d33; pointer-events:none; }
+.astra-overview-caption small { font-size:14px; letter-spacing:.35em; }
+.astra-overview-caption strong { display:block; font:500 clamp(18px,2.5vw,32px)/1.7 "Yu Mincho",serif; margin:14px 0; }
+.astra-overview-caption span { font-size:14px; }
+.astra-edition.astra-overview .diorama-hud,.astra-edition.astra-overview .diorama-objective,.astra-edition.astra-overview .diorama-console { display:none; }
+.astra-overview .astra-overview-caption { bottom:48px; }
+.astra-overview .astra-view { top:24px; }
+.astra-nearby { position:absolute; z-index:18; bottom:175px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:12px; min-height:48px; padding:8px 20px 8px 8px; border:1px solid #e0c894; border-radius:30px; background:#153b35ed; color:#fff1cf; font-size:14px; cursor:pointer; white-space:nowrap; box-shadow:0 8px 30px #133c3840; }
+.astra-nearby kbd { display:grid; place-items:center; width:32px; height:32px; background:#e2c991; color:#1b3934; border-radius:50%; }
+.astra-edition .diorama-console { position:absolute; bottom:0; width:100%; z-index:20; display:flex; padding:20px 26px; background:transparent; border:0; pointer-events:none; }
+.astra-edition .diorama-message { position:absolute; bottom:23px; left:50%; width:min(44%,520px); transform:translateX(-50%); padding:12px 18px; font-size:14px; text-align:center; background:#153c36e3; border:1px solid #d3d7aa30; border-radius:4px; }
+.astra-edition .diorama-touch { width:100%; justify-content:space-between; gap:20px; pointer-events:none; }
+.astra-edition .diorama-dpad,.astra-edition .diorama-actions { pointer-events:auto; }
+.astra-edition .diorama-dpad { grid-template-columns:repeat(3,44px); grid-template-rows:repeat(3,44px); gap:3px; }
+.astra-edition .diorama-dpad button { border-radius:50%; background:#143d3bda; border-color:#edf3d759; box-shadow:0 5px 18px #122d3530; }
+.astra-edition .diorama-actions { width:180px; gap:7px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.astra-edition .diorama-actions button { min-height:44px; font-size:14px; background:#123b37ed; border-color:#d9d9b34a; }
+.astra-edition .diorama-actions small { font-size:12px; }
+.astra-edition .diorama-actions .confirm { min-height:58px; background:#e8ca88; color:#20392f; border:0; }
+.astra-edition .diorama-help { display:none; }
+.astra-edition .diorama-dialogue { bottom:165px; right:18%; left:18%; padding:20px 24px 22px 120px; border-color:#ebd69f; background:#113933fa; }
+.astra-edition .diorama-dialogue p { font-size:16px; line-height:1.8; }
+.astra-edition .diorama-dialogue small { font-size:12px; }
+.astra-edition .diorama-battle { bottom:170px; width:min(480px,56%); }
+.astra-edition .diorama-battle>p { font-size:15px; }
+.astra-edition .diorama-commands button { min-height:48px; font-size:14px; }
+.astra-edition .diorama-commands button small { font-size:12px; }
+.astra-edition .diorama-menu,.astra-edition .diorama-shop { inset:35px 18% 180px; }
+.astra-edition .diorama-menu-grid p,.astra-edition .diorama-menu-grid section>small,.astra-edition .diorama-items button { font-size:14px; line-height:1.65; }
+.astra-edition .diorama-menu header button { min-height:44px; }
+@media(max-width:1000px) {
+  .study-header { padding:12px 18px; gap:14px; }.study-title { display:grid; gap:5px; }.study-title>span {font-size:18px;}.study-badge{display:none;}
+  .astra-edition .diorama-stage { height:calc(100svh - 142px); min-height:540px; }
+  .astra-edition .diorama-dialogue { left:14px; right:14px; }
+  .astra-edition .diorama-message { bottom:14px; font-size:12px; width:45%; }
+  .astra-edition .diorama-hud { grid-template-columns:240px auto; }
+}
+@media(max-width:600px) {
+  .study-header {height:116px;flex-wrap:wrap;gap:6px;padding:10px 12px;}.study-title{display:flex;width:100%;}.study-title h1{font-size:12px;}.study-switch{margin:0;padding:2px;}.study-switch button{padding:0 18px;min-height:40px;}
+  .study-footer{padding:10px 12px;}.study-footer>span{display:none;}
+  .astra-edition .diorama-stage{height:calc(100svh - 164px);min-height:630px;}
+  .astra-edition .diorama-hud{left:12px;top:12px;grid-template-columns:190px auto;}.astra-edition .diorama-party-status{grid-template-columns:35px 1fr;padding:8px;}.astra-edition .diorama-portrait{width:35px;height:40px;}
+  .astra-edition .diorama-objective{left:12px;top:92px;width:235px;padding:10px 12px;}.astra-edition .diorama-objective strong{font-size:14px;}.astra-edition .diorama-objective span{font-size:12px;}
+  .astra-view{right:12px;top:12px;padding:9px;min-height:58px;}.astra-view span{display:none;}
+  .astra-edition .diorama-console{padding:12px;}.astra-edition .diorama-actions{width:155px;}.astra-edition .diorama-message{display:none;}.astra-edition .diorama-dpad{grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);}
+  .astra-edition .diorama-dialogue{padding:14px 16px 18px 84px;bottom:165px;}.astra-edition .diorama-dialogue-portrait{width:58px;}.astra-edition .diorama-dialogue p{font-size:14px;}
+  .astra-edition .diorama-menu,.astra-edition .diorama-shop{inset:8px 8px 165px;}.astra-edition .diorama-battle{width:calc(100% - 16px);right:8px;bottom:165px;}
+  .astra-overview-caption{bottom:172px;}.astra-overview-caption strong{font-size:18px;}.astra-nearby{font-size:12px;max-width:94%;white-space:normal;}
+}

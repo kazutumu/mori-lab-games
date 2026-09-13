@@ -1,0 +1,64 @@
+.game-shell:has(.starmoss-root) { background:#081822; }
+.game-shell:has(.starmoss-root)>.topbar,.game-shell:has(.starmoss-root)>footer,.game-shell:has(.starmoss-root)>.mist { display:none; }
+.play-view:has(.starmoss-root) { max-width:1500px; padding:20px 28px 24px; margin:0 auto; }
+.play-view:has(.starmoss-root)>.back-button { color:#afc1c2; font-size:13px; min-height:36px; padding:0; }
+.play-view:has(.starmoss-root)>.play-heading { display:flex; flex-direction:row-reverse; align-items:center; justify-content:space-between; gap:20px; margin:7px 0 22px; }
+.play-view:has(.starmoss-root)>.play-heading h1 { margin:0; font:400 clamp(20px,2.3vw,32px)/1.5 "Yu Mincho","Hiragino Mincho ProN",serif; color:#e9e7d2; letter-spacing:.07em; }
+.play-view:has(.starmoss-root)>.play-heading>span { color:#83a8a9; font:12px/1.5 ui-monospace,monospace; letter-spacing:.1em; }
+.starmoss-root { --moss-gold:#e2c88b; display:grid; grid-template-columns:minmax(0,1fr) 270px; max-width:none; border:1px solid #6b858d40; border-radius:8px; background:#0d232c; box-shadow:0 24px 70px #0005; position:relative; }
+.starmoss-root button:focus-visible { outline:3px solid var(--moss-gold); outline-offset:3px; }
+.starmoss-root .jrpg-statusbar { grid-column:1/-1; grid-template-columns:minmax(230px,1.6fr) minmax(145px,.9fr) minmax(130px,1fr) minmax(130px,1fr) 70px; gap:22px; padding:14px 22px; background:#102b34; border-bottom:1px solid #59757d55; align-items:center; }
+.starmoss-root .jrpg-statusbar>div { padding:0; background:none; }
+.starmoss-root .jrpg-statusbar>div:nth-child(4) { display:block; }
+.starmoss-root .jrpg-statusbar small { font:12px/1.5 sans-serif; color:#9ebabe; letter-spacing:.04em; margin:0 0 5px; }
+.starmoss-root .jrpg-statusbar strong { font:500 18px/1.4 "Yu Mincho",serif; color:#eee7c9; }
+.starmoss-root .jrpg-statusbar small b { float:right; font-weight:400; color:#d4e1d5; }
+.starmoss-location small span { font:10px/1 ui-monospace,monospace; margin-left:12px; color:#c5b782; }
+.starmoss-root .jrpg-statusbar .starmoss-mina { display:flex; gap:12px; align-items:center; }
+.starmoss-mina>i { display:block; width:36px; height:48px; background:url('/game-assets/rpg2d-ch1/mina-down-v1.png') center/contain no-repeat; image-rendering:pixelated; }
+.starmoss-mina em { font:12px sans-serif; color:#b2c6bd; font-style:normal; margin-left:7px; }
+.starmoss-meter { height:5px; border-radius:8px; overflow:hidden; background:#06171f; }
+.starmoss-meter i { display:block; height:100%; background:#cfae76; transition:width .3s; }.starmoss-meter.sp i { background:#75b9b3; }
+.starmoss-root .jrpg-screen { grid-column:1; grid-row:2; width:100%; height:calc(100svh - 235px); min-height:570px; max-height:880px; aspect-ratio:auto; margin:0; border:0; outline:none; box-shadow:none; box-sizing:border-box; background:#112738; }
+.starmoss-root .jrpg-canvas { width:100%; height:100%; aspect-ratio:auto; cursor:crosshair; }
+.starmoss-root .jrpg-objective { grid-column:2; grid-row:2; display:block; width:auto; min-width:0; box-sizing:border-box; margin:0; padding:28px 24px; border:0; border-left:1px solid #59757d3b; background:linear-gradient(#102c35,#0b202b); align-self:stretch; }
+.starmoss-root .jrpg-objective>span { font-size:12px; letter-spacing:.06em; color:#88abae; }
+.starmoss-root .jrpg-objective h2 { margin:8px 0 23px; color:var(--moss-gold); font:400 25px/1.5 "Yu Mincho",serif; letter-spacing:.12em; }
+.starmoss-root .jrpg-objective>strong { display:block; font:400 16px/1.8 "Yu Mincho",serif; color:#ece8d0; min-height:58px; }
+.starmoss-map { margin:22px -3px 16px; padding:12px 2px 8px; border-top:1px solid #7e989b33; border-bottom:1px solid #7e989b33; }
+.starmoss-map svg { display:block; width:100%; height:130px; }
+.starmoss-map figcaption { display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:#9ebabb; }.starmoss-map figcaption span:first-child { color:var(--moss-gold); }
+.starmoss-destination { color:#90aeb1; font-size:12px; line-height:1.8; margin:0; }.starmoss-destination b { display:block; font-weight:400; color:#dce7d8; font-size:14px; }
+.starmoss-chapter-steps { list-style:none; margin:22px 0; padding:0; display:grid; gap:14px; }
+.starmoss-chapter-steps li { display:flex; align-items:center; gap:10px; color:#759299; font-size:13px; line-height:1.5; }.starmoss-chapter-steps li>span { font:11px ui-monospace,monospace; opacity:.6; }.starmoss-chapter-steps li>b { margin-left:auto; font:12px ui-monospace,monospace; }.starmoss-chapter-steps .current { color:var(--moss-gold); }.starmoss-chapter-steps .done { color:#a8ccc0; }.starmoss-chapter-steps .done>span { color:#8acfbb; opacity:1; }
+.starmoss-root .starmoss-save-note { display:block; border-top:1px solid #7e989b33; padding-top:15px; color:#829fa5; font-size:12px; line-height:1.8; }
+.starmoss-root .jrpg-touch { grid-column:1; grid-row:2; align-self:end; z-index:20; display:flex; justify-content:space-between; width:auto; margin:0; padding:18px 22px; gap:16px; background:none; border:0; pointer-events:none; }
+.starmoss-root .jrpg-dpad,.starmoss-root .jrpg-action-buttons { pointer-events:auto; }
+.starmoss-root .jrpg-dpad { grid-template-columns:repeat(3,44px); grid-template-rows:repeat(3,44px); gap:4px; }
+.starmoss-root .jrpg-dpad button { border-radius:50%; border:1px solid #c3d6cd48; background:#0c2635dc; color:#d8e5d7; font-size:21px; backdrop-filter:blur(7px); box-shadow:0 3px 12px #0002; }
+.starmoss-root .jrpg-action-buttons { width:180px; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; align-self:end; }
+.starmoss-root .jrpg-action-buttons button { min-height:48px; font-size:14px; background:#102c39ed; border:1px solid #abc3bb44; color:#d0dfd2; border-radius:6px; }
+.starmoss-root .jrpg-action-buttons small { font-size:12px; opacity:.65; }.starmoss-root .jrpg-action-buttons .jrpg-confirm-button { min-height:64px; grid-column:1/-1; padding:8px; color:#1b3033; background:#e4cd94; border:1px solid #f0dfae; box-shadow:0 4px 15px #0003; }
+.starmoss-root .jrpg-help { grid-column:1/-1; margin:0; padding:12px 20px; font-size:12px; color:#8ba9ad; background:#0b202a; border-top:1px solid #50727b33; line-height:1.7; }
+.starmoss-field-caption { position:absolute; z-index:3; top:20px; left:22px; color:#c7d4c5; font-size:12px; letter-spacing:.08em; text-shadow:0 2px 5px #03131f; pointer-events:none; }
+.starmoss-field-caption>span { padding:7px 10px; background:#0b24328c; border-radius:4px; }.starmoss-field-caption p { max-width:220px; padding:8px 10px; color:#f4d4a0; background:#0b2432dd; line-height:1.5; }
+.starmoss-root .jrpg-dialogue { left:20px; right:20px; bottom:180px; min-height:150px; padding:23px 25px 34px 108px; border:1px solid #d8c494; border-radius:5px; color:#f3edd7; background:linear-gradient(110deg,#102c38fa,#102936fa); box-shadow:0 12px 40px #0007; }
+.starmoss-root .jrpg-dialogue small { font:500 16px "Yu Mincho",serif; margin-bottom:13px; color:#e4cd93; }.starmoss-root .jrpg-dialogue span { font-size:16px; line-height:1.9; padding:0; }.starmoss-root .jrpg-dialogue b { bottom:14px;right:20px;font-size:12px;font-weight:400; }
+.starmoss-dialogue-portrait { position:absolute; width:64px; height:90px; top:28px; left:22px; background-size:contain; background-position:center bottom; background-repeat:no-repeat; image-rendering:pixelated; }
+.starmoss-root .jrpg-menu,.starmoss-root .jrpg-shop { inset:20px; border:1px solid #b8b995; border-radius:5px; background:#0d2734fc; }.starmoss-root .jrpg-menu header,.starmoss-root .jrpg-shop header { padding:16px 20px; background:#12343d; }.starmoss-root .jrpg-menu header strong,.starmoss-root .jrpg-shop header strong { font-size:20px; }.starmoss-root .jrpg-menu-grid { padding:20px;gap:15px; }.starmoss-root .jrpg-menu-grid small { font-size:14px; }.starmoss-root .jrpg-menu-grid p { font-size:14px; line-height:1.8; }.starmoss-root .jrpg-menu button,.starmoss-root .jrpg-shop button { font-size:14px; min-height:46px; }.starmoss-root .jrpg-items button { padding:10px; }.starmoss-root .jrpg-save-button { margin-left:20px; }.starmoss-root:has(.jrpg-menu) .jrpg-touch,.starmoss-root:has(.jrpg-shop) .jrpg-touch,.starmoss-in-battle .jrpg-touch { visibility:hidden; }
+.starmoss-battle-message { position:absolute; left:22px; right:22px; top:20px; height:100px; box-sizing:border-box; padding:12px 18px; background:#0b2235ed; border-left:2px solid #e1c88d; pointer-events:auto; }.starmoss-battle-message small { color:#b8cbbe; font:12px/16px sans-serif; }.starmoss-battle-message p { color:#f0e6c9; font:16px/24px "Yu Mincho",serif; margin:4px 0 0; max-height:48px; overflow:auto; }
+.starmoss-root .jrpg-targets { top:132px; left:22px; right:22px; max-width:none; flex-wrap:nowrap; gap:8px; }.starmoss-root .jrpg-targets button { flex:1; min-width:0; font:14px/1.5 sans-serif; padding:9px 4px; border-radius:4px; }.starmoss-root .jrpg-targets button span { font-size:12px; }
+.starmoss-root .jrpg-commands { right:22px; bottom:22px; width:min(460px,calc(100% - 44px)); padding:8px; gap:7px; border:1px solid #b9b38e; background:#102835ef; border-radius:5px; }.starmoss-root .jrpg-commands button,.starmoss-root .jrpg-subcommands button { min-height:52px; font-size:15px; background:#1b3b45; border:1px solid #8aa1a459; color:#e8e5ca; }.starmoss-root .jrpg-commands button:hover { background:#d8c795; color:#183039; }.starmoss-root .jrpg-waiting { right:22px; bottom:35px; color:#e7d598; font-size:16px; }.starmoss-root .jrpg-recover { min-height:52px; font-size:15px; }
+.starmoss-root .jrpg-loading { background:radial-gradient(ellipse,#193b48,#0a1b2b);font:18px/1.8 "Yu Mincho",serif;letter-spacing:.1em; }
+@media(max-width:1100px){
+  .play-view:has(.starmoss-root){padding:15px;}.play-view:has(.starmoss-root)>.play-heading>span{display:none;}
+  .starmoss-root{grid-template-columns:minmax(0,1fr) 220px;}.starmoss-root .jrpg-objective{padding:23px 18px;}.starmoss-root .jrpg-statusbar{gap:14px;grid-template-columns:1.5fr 1fr 1fr 1fr;}.starmoss-root .jrpg-statusbar>div:last-child{display:none;}.starmoss-location small span{display:none;}
+}
+@media(max-width:780px){
+  .play-view:has(.starmoss-root){padding:12px 10px 18px;}.play-view:has(.starmoss-root)>.play-heading{margin:6px 0 15px;}.play-view:has(.starmoss-root)>.play-heading h1{font-size:21px;letter-spacing:.02em;}
+  .starmoss-root{grid-template-columns:1fr;border-radius:5px;}.starmoss-root .jrpg-statusbar{grid-column:1;grid-template-columns:1.3fr 1fr 1fr;gap:12px;padding:12px 14px;}.starmoss-root .jrpg-statusbar .starmoss-mina{display:none;}.starmoss-root .jrpg-statusbar strong{font-size:16px;}.starmoss-root .jrpg-statusbar small{font-size:11px;}.starmoss-root .jrpg-statusbar small b{float:none;display:block;}
+  .starmoss-root .jrpg-objective{grid-column:1;grid-row:2;padding:12px 15px;display:block;border:0;border-bottom:1px solid #59757d3b;}.starmoss-root .jrpg-objective>span,.starmoss-root .jrpg-objective>h2,.starmoss-map,.starmoss-chapter-steps,.starmoss-root .starmoss-save-note{display:none;}.starmoss-root .jrpg-objective>strong{font-size:14px;min-height:0;}.starmoss-destination{font-size:12px;display:flex;gap:10px;margin-top:3px;}.starmoss-destination b{font-size:12px;}
+  .starmoss-root .jrpg-screen{grid-row:3;height:calc(100svh - 260px);min-height:510px;max-height:850px;}.starmoss-root .jrpg-touch{grid-row:3;padding:13px 12px;gap:10px;}.starmoss-root .jrpg-dpad{gap:3px;}.starmoss-root .jrpg-action-buttons{width:154px;}.starmoss-root .jrpg-action-buttons button{font-size:13px;}.starmoss-root .jrpg-action-buttons .jrpg-confirm-button{min-height:60px;}.starmoss-root .jrpg-help{font-size:11px;padding:10px 14px;}
+  .starmoss-root .jrpg-dialogue{left:10px;right:10px;bottom:170px;padding:18px 17px 30px 78px;min-height:150px;}.starmoss-dialogue-portrait{left:14px;top:28px;width:48px;height:72px;}.starmoss-root .jrpg-dialogue span{font-size:15px;line-height:1.8;}.starmoss-root .jrpg-dialogue small{font-size:15px;}.starmoss-root .jrpg-menu,.starmoss-root .jrpg-shop{inset:10px;}.starmoss-root .jrpg-menu-grid{padding:13px;grid-template-columns:1fr;}.starmoss-battle-message{top:12px;left:12px;right:12px;padding:12px;}.starmoss-battle-message p{font-size:15px;}.starmoss-root .jrpg-targets{right:12px;top:130px;}.starmoss-root .jrpg-commands{width:calc(100% - 24px);right:12px;bottom:12px;}
+}
+@media(prefers-reduced-motion:reduce){.starmoss-meter i{transition:none;}}

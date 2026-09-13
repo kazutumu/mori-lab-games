@@ -17,6 +17,38 @@ after(async () => {
   await vite.close();
 });
 
+test("Astra tap paths stop at portals and go around blocked tiles", () => {
+  const map=makeMovementTestMap([[2,2],[2,3]]);
+  const start={x:1,y:2};const target={x:3,y:2};
+  const path=game.findMinaPixelPath(map,start,target);
+  assert.ok(path&&path.length>2);
+  let position={...start};
+  for(const direction of path){const [dx,dy]=game.MINA_PIXEL_WORLD_DIRECTION_DELTA[direction];position={x:position.x+dx,y:position.y+dy};assert.ok(game.isMinaPixelTileWalkable(map,position.x,position.y));}
+  assert.deepEqual(position,target);
+  const corridor=makeMovementTestMap(Array.from({length:5},(_,x)=>[[x,0],[x,1],[x,3],[x,4]]).flat());
+  corridor.portals=[{x:2,y:2,to:"forest",toX:1,toY:1}];
+  assert.equal(game.findMinaPixelPath(corridor,{x:0,y:2},{x:4,y:2}),null);
+  assert.deepEqual(game.findMinaPixelPath(corridor,{x:0,y:2},{x:2,y:2}),["right","right"]);
+});
+
+test("Astra rescues blocked old positions without discarding progress or inventory", () => {
+  const save={...game.freshMinaPixelChapterSave(),map:"laboratory",x:0,y:0,level:4,xp:220,gold:136,progress:3,beacons:["beacon-west","beacon-south","beacon-east"],pedestals:["pedestal-a"],chests:["forest-west"]};
+  const before=structuredClone(save);const recovered=game.recoverMinaPixelPosition(save);
+  assert.deepEqual(save,before);
+  assert.ok(game.isMinaPixelTileWalkable(game.createMinaPixelWorldMaps().laboratory,recovered.x,recovered.y));
+  const {x:oldX,y:oldY,...oldState}=save;const {x:newX,y:newY,...newState}=recovered;
+  assert.deepEqual(newState,oldState);assert.notDeepEqual([newX,newY],[oldX,oldY]);
+  const fresh=game.freshMinaPixelChapterSave();assert.strictEqual(game.recoverMinaPixelPosition(fresh),fresh);
+});
+
+test("Astra mission guidance has a safe path at every chapter checkpoint", () => {
+  const maps=game.createMinaPixelWorldMaps(),fresh=game.freshMinaPixelChapterSave();
+  const beacons=["beacon-west","beacon-south","beacon-east"],pedestals=["pedestal-a","pedestal-b","pedestal-c"];
+  const states=[fresh,{...fresh,map:"apothecary",x:8,y:9},{...fresh,map:"forest",x:20,y:27,progress:1},{...fresh,map:"forest",x:20,y:2,progress:2,beacons},{...fresh,map:"laboratory",x:12,y:16,progress:2,beacons},{...fresh,map:"laboratory",x:12,y:2,progress:3,beacons,pedestals},{...fresh,map:"depths",x:15,y:18,progress:3,beacons,pedestals},{...fresh,map:"depths",x:15,y:6,progress:4,bossDefeated:true,beacons,pedestals}];
+  for(const state of states){const before=structuredClone(state),target=game.minaPixelNextDestination(state);assert.ok(target);assert.ok(game.findMinaPixelPath(maps[state.map],state,target,target.adjacent),`${state.map}: ${target.label}`);assert.deepEqual(state,before);}
+  assert.equal(game.minaPixelNextDestination({...fresh,completed:true}),null);
+});
+
 function reachableTiles(map, start) {
   const queue = [start];
   const visited = new Set([`${start.x},${start.y}`]);
@@ -356,29 +388,18 @@ test("village buildings and edge decoration preserve the authored walkability", 
   assert.equal(edgeDecoration.length, 0, "the removed perimeter props must not float over the village sea frame");
 });
 
-test("battle art stays above the two-row command panel on M1 iPad layouts", () => {
-  const layout = game.MINA_PIXEL_BATTLE_LAYOUT;
-  const commandPanelHeight = 104;
-  const commandPanelBottom = 10;
-  for (const displayWidth of [760, 720]) {
-    const scale = displayWidth / game.MINA_PIXEL_RENDER_PROFILE.width;
-    const displayHeight = game.MINA_PIXEL_RENDER_PROFILE.height * scale;
-    const commandTop = displayHeight - commandPanelBottom - commandPanelHeight;
-    const normalHudBottom = (
-      layout.normalEnemy.y
-      + layout.normalEnemy.staggerY
-      + layout.normalEnemy.size
-      + 10
-      + layout.hpPanelHeight
-    ) * scale;
-    const bossHudBottom = (
-      layout.boss.y
-      + layout.boss.size
-      + 10
-      + layout.hpPanelHeight
-    ) * scale;
-    assert.ok(normalHudBottom < commandTop, `normal enemy HUD must clear commands at ${displayWidth}px`);
-    assert.ok(bossHudBottom < commandTop, `boss HUD must clear commands at ${displayWidth}px`);
+test("Astra battle art clears HTML messages and commands at mobile, tablet and desktop sizes", () => {
+  for (const [displayWidth, displayHeight] of [[350,510],[430,510],[550,570],[720,570],[1024,650],[1280,880]]) {
+    const width=Math.max(640,displayWidth),scale=displayWidth/width,height=displayHeight/scale;
+    for(const [boss,count] of [[false,1],[false,2],[false,3],[true,1]]){
+      const layout=game.starMossBattleLayout(width,height,count,boss,displayWidth);
+      for(const art of [layout.mina,...layout.enemies]){
+        assert.ok(art.x>=0&&art.x+art.width<=width,`art fits at ${displayWidth}px`);
+        assert.ok(art.y*scale>=205,`art clears message and target band at ${displayWidth}px`);
+        assert.ok((art.y+art.height+3)*scale<displayHeight-155,`art clears two command rows at ${displayWidth}px`);
+      }
+      for(let i=1;i<layout.enemies.length;i++)assert.ok(layout.enemies[i-1].x+layout.enemies[i-1].width<layout.enemies[i].x,"enemy sprites do not overlap");
+    }
   }
 });
 

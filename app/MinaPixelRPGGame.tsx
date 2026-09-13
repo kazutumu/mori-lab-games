@@ -7,6 +7,8 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createStarMossScene } from "./starMossScene";
+import "./starmoss.css";
 
 type Props = { onClear: () => void };
 type Direction = "up" | "down" | "left" | "right";
@@ -139,13 +141,7 @@ export const MINA_PIXEL_RENDER_PROFILE = {
   actorHeight: 96,
   mode: "native-detail",
 } as const;
-export const MINA_PIXEL_BATTLE_LAYOUT = {
-  mina: { x: 80, y: 270, width: 96, height: 128 },
-  normalEnemy: { startX: 520, gapX: 170, y: 160, staggerY: 24, size: 128 },
-  boss: { x: 650, y: 160, size: 192 },
-  hpPanelHeight: 42,
-  messagePanel: { x: 16, y: 16, width: 992, height: 72 },
-} as const;
+export { starMossBattleLayout } from "./starMossScene";
 export const MINA_PIXEL_FIELD_PROFILE = {
   tileWidth: 64,
   tileDepth: 32,
@@ -161,9 +157,6 @@ export function projectMinaPixelFieldPoint(x: number, y: number) {
 }
 const LOGICAL_WIDTH = MINA_PIXEL_RENDER_PROFILE.width;
 const LOGICAL_HEIGHT = MINA_PIXEL_RENDER_PROFILE.height;
-const TILE = MINA_PIXEL_RENDER_PROFILE.tile;
-const ACTOR_WIDTH = MINA_PIXEL_RENDER_PROFILE.actorWidth;
-const ACTOR_HEIGHT = MINA_PIXEL_RENDER_PROFILE.actorHeight;
 const MOVE_TIME = 142;
 const MAP_IDS: MapId[] = ["village", "apothecary", "workshop", "forest", "laboratory", "depths"];
 const DIRECTIONS: Direction[] = ["up", "down", "left", "right"];
@@ -619,6 +612,74 @@ function objectiveFor(save: MinaPixelChapterSave) {
   return "灯枝村へ戻り、イト研究員に報告する";
 }
 
+export type StarMossDestination = { x: number; y: number; label: string; adjacent: boolean };
+
+export function findMinaPixelPath(map: PixelMapDefinition, from: { x: number; y: number }, to: { x: number; y: number }, adjacent = false): Direction[] | null {
+  const goal = (x: number, y: number) => Math.abs(x-to.x)+Math.abs(y-to.y) <= (adjacent ? 1 : 0);
+  const nodes = [{ x: from.x, y: from.y, parent: -1, direction: "up" as Direction }];
+  const seen = new Set([`${from.x},${from.y}`]);
+  for (let i=0;i<nodes.length;i++) {
+    const node=nodes[i];
+    if (goal(node.x,node.y)) {
+      const result: Direction[]=[]; let cursor=i;
+      while(nodes[cursor].parent>=0){result.push(nodes[cursor].direction);cursor=nodes[cursor].parent;}
+      return result.reverse();
+    }
+    if (i>0 && map.portals.some(p=>p.x===node.x&&p.y===node.y)) continue;
+    for(const direction of DIRECTIONS){
+      const [dx,dy]=MINA_PIXEL_WORLD_DIRECTION_DELTA[direction];const x=node.x+dx,y=node.y+dy,key=`${x},${y}`;
+      if(seen.has(key)||!isMinaPixelTileWalkable(map,x,y))continue;
+      seen.add(key);nodes.push({x,y,parent:i,direction});
+    }
+  }
+  return null;
+}
+
+export function recoverMinaPixelPosition(save: MinaPixelChapterSave): MinaPixelChapterSave {
+  const map=WORLD_MAPS[save.map];
+  if(Number.isFinite(save.x)&&Number.isFinite(save.y)&&isMinaPixelTileWalkable(map,save.x,save.y,true))return save;
+  const x=Number.isFinite(save.x)?save.x:map.width/2,y=Number.isFinite(save.y)?save.y:map.height/2;
+  let nearest={x:15,y:17},distance=Infinity;
+  for(let yy=0;yy<map.height;yy++)for(let xx=0;xx<map.width;xx++){
+    if(!isMinaPixelTileWalkable(map,xx,yy)||map.portals.some(p=>p.x===xx&&p.y===yy))continue;
+    const d=Math.abs(x-xx)+Math.abs(y-yy);if(d<distance){distance=d;nearest={x:xx,y:yy};}
+  }
+  return {...save,...nearest};
+}
+
+export function minaPixelNextDestination(save: MinaPixelChapterSave): StarMossDestination | null {
+  if(save.completed)return null;
+  let goalMap: MapId="village";let target: StarMossDestination={x:16,y:11,label:"イト研究員",adjacent:true};
+  if(save.progress>0&&!save.bossDefeated){
+    if(save.beacons.length<3){
+      goalMap="forest";const remaining=BEACONS.filter(b=>!save.beacons.includes(b.id));
+      const b=[...remaining].sort((a,b)=>distanceTo(save.x,save.y,a.x,a.y)-distanceTo(save.x,save.y,b.x,b.y))[0];
+      target={x:b.x,y:b.y,label:b.name,adjacent:true};
+    }else if(save.pedestals.length<3){
+      goalMap="laboratory";const p=PEDESTALS.find(p=>!save.pedestals.includes(p.id))!;
+      target={x:p.x,y:p.y,label:"方位台座",adjacent:true};
+    }else{goalMap="depths";target={x:15,y:6,label:"北喰みヨハク",adjacent:false};}
+  }
+  if(save.map===goalMap)return target;
+  const queue: {map:MapId;first:PortalDefinition|null}[]=[{map:save.map,first:null}],seen=new Set<MapId>([save.map]);
+  for(let i=0;i<queue.length;i++)for(const portal of WORLD_MAPS[queue[i].map].portals){
+    if(seen.has(portal.to))continue;
+    const first=queue[i].first??portal;
+    if(portal.to===goalMap)return{x:first.x,y:first.y,label:`${WORLD_MAPS[first.to].name}へ`,adjacent:false};
+    seen.add(portal.to);queue.push({map:portal.to,first});
+  }
+  return null;
+}
+
+function interactionTarget(save: MinaPixelChapterSave): StarMossDestination | null {
+  const map=WORLD_MAPS[save.map];const front=frontTile(save);
+  const candidates: StarMossDestination[]=[
+    ...map.npcs.map(n=>({...n,label:`${n.name}に話す`,adjacent:true})),
+    ...map.props.filter(p=>p.asset==="propChest"||p.asset==="propSaveMonument"||p.id.startsWith("acorn")).map(p=>({...p,label:p.asset==="propChest"?"宝箱を調べる":p.id.startsWith("acorn")?"青いどんぐりを拾う":"灯りを調べる",adjacent:true})),
+  ];
+  return candidates.filter(p=>distanceTo(save.x,save.y,p.x,p.y)<=1).sort((a,b)=>distanceTo(front.x,front.y,a.x,a.y)-distanceTo(front.x,front.y,b.x,b.y))[0]??null;
+}
+
 function statsFor(save: MinaPixelChapterSave) {
   const armor = save.equipment.armor === "星苔の外套" ? 6 : 3;
   const charm = save.equipment.charm === "観測のお守り" ? 2 : 0;
@@ -681,6 +742,24 @@ function formatPlayTime(seconds: number) {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
+const atlasPaths = new Map<MapId, {color:string;d:string}[]>();
+function StarMossMap({map,position,target}:{map:PixelMapDefinition;position:{x:number;y:number};target:StarMossDestination|null}) {
+  if(!atlasPaths.has(map.id)){
+    const paths=new Map<string,string>();
+    map.tiles.forEach((row,y)=>row.forEach((tile,x)=>{
+      const p=projectMinaPixelFieldPoint(x,y);
+      const color=tile==="water"?"#173444":tile==="path"||tile==="stoneFloor"?"#6a8270":IMPASSABLE.has(tile)?"#253e3e":"#3c6257";
+      paths.set(color,(paths.get(color)??"")+`M${p.x},${p.y}l32,16 -32,16 -32,-16Z`);
+    }));atlasPaths.set(map.id,[...paths].map(([color,d])=>({color,d})));
+  }
+  const p=projectMinaPixelFieldPoint(position.x+.5,position.y+.5),t=target?projectMinaPixelFieldPoint(target.x+.5,target.y+.5):null;
+  return <figure className="starmoss-map"><svg viewBox={`${-map.height*32-20} -20 ${(map.width+map.height)*32+40} ${(map.width+map.height)*16+40}`} role="img" aria-label={`${map.name}の方位図。金色がミナ、白い輪が次の場所`}>
+    {atlasPaths.get(map.id)!.map(path=><path key={path.color} d={path.d} fill={path.color} />)}
+    {t&&<circle cx={t.x} cy={t.y} r="20" fill="none" stroke="#d4e8d0" strokeWidth="8" />}
+    <circle cx={p.x} cy={p.y} r="17" fill="#f5d795" stroke="#102d38" strokeWidth="6" />
+  </svg><figcaption><span>● ミナ</span><span>○ 次の場所</span></figcaption></figure>;
+}
+
 export default function MinaPixelRPGGame({ onClear }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const saveRef = useRef<MinaPixelChapterSave>(freshMinaPixelChapterSave());
@@ -723,6 +802,8 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
   const [shopOpen, setShopOpen] = useState(false);
   const [battle, setBattle] = useState<BattleState | null>(null);
   const [saveStatus, setSaveStatus] = useState("端末内オートセーブ");
+  const [navigationNotice, setNavigationNotice] = useState("");
+  const walkingToRef = useRef<{x:number;y:number}|null>(null);
 
   useEffect(() => { onClearRef.current = onClear; }, [onClear]);
 
@@ -781,10 +862,7 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
     } catch {
       saveRef.current = freshMinaPixelChapterSave();
     }
-    const map = WORLD_MAPS[saveRef.current.map];
-    if (!isMinaPixelTileWalkable(map, saveRef.current.x, saveRef.current.y, true)) {
-      saveRef.current = freshMinaPixelChapterSave();
-    }
+    saveRef.current = recoverMinaPixelPosition(saveRef.current);
     setSnapshot(copySave(saveRef.current));
     setHydrated(true);
   }, []);
@@ -1164,6 +1242,11 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
     if (dialogueRef.current || menuRef.current || shopRef.current || battleRef.current || movementRef.current) return;
     const save = saveRef.current;
     const map = WORLD_MAPS[save.map];
+    const nearby = interactionTarget(save);
+    if (nearby) {
+      const dx=nearby.x-save.x,dy=nearby.y-save.y;
+      save.direction=dx<0?"left":dx>0?"right":dy<0?"up":"down";
+    }
     const front = frontTile(save);
     const npc = map.npcs.find((candidate) => distanceTo(front.x, front.y, candidate.x, candidate.y) === 0 || distanceTo(save.x, save.y, candidate.x, candidate.y) === 0);
     if (npc) { talkToNpc(npc); return; }
@@ -1272,304 +1355,28 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
     let lastSecond = performance.now();
     let visible = !document.hidden;
 
-    const drawImage = (key: AssetKey, x: number, y: number, width: number, height: number) => {
-      const image = imagesRef.current[key];
-      if (image) context.drawImage(image, Math.round(x), Math.round(y), Math.round(width), Math.round(height));
-    };
-
+    const scene = createStarMossScene(canvas, { maps: WORLD_MAPS, images: () => imagesRef.current, tiles: TILE_ASSET, actors: MINA_ASSET });
+    let routeKey = "";
+    let routePoints: {x:number;y:number}[] = [];
+    let destination: StarMossDestination | null = null;
     const visualPosition = (now: number) => {
       const movement = movementRef.current;
       if (!movement) return { x: saveRef.current.x, y: saveRef.current.y, bob: 0 };
       const t = clamp((now - movement.startedAt) / MOVE_TIME, 0, 1);
-      const eased = t * t * (3 - 2 * t);
-      return {
-        x: movement.fromX + (movement.toX - movement.fromX) * eased,
-        y: movement.fromY + (movement.toY - movement.fromY) * eased,
-        bob: Math.sin(t * Math.PI) * 2,
-      };
+      return { x: movement.fromX + (movement.toX-movement.fromX)*t, y: movement.fromY + (movement.toY-movement.fromY)*t, bob: Math.sin(t*Math.PI)*2 };
     };
-
-    const fieldProfile = MINA_PIXEL_FIELD_PROFILE;
-    const fieldTopMargin = 96;
-    const projectedFoot = (x: number, y: number) => {
-      const point = projectMinaPixelFieldPoint(x + .5, y + .5);
-      return {
-        x: point.x,
-        y: point.y + fieldTopMargin,
-      };
-    };
-    const cameraFor = (map: PixelMapDefinition, position: { x: number; y: number }) => {
-      const foot = projectedFoot(position.x, position.y);
-      const west = projectMinaPixelFieldPoint(0, map.height).x;
-      const east = projectMinaPixelFieldPoint(map.width, 0).x;
-      const mapWidth = east - west;
-      const mapHeight = fieldTopMargin
-        + projectMinaPixelFieldPoint(map.width, map.height).y
-        + fieldProfile.islandEdgeDepth;
-      return {
-        x: Math.round(mapWidth <= LOGICAL_WIDTH
-          ? west - (LOGICAL_WIDTH - mapWidth) / 2
-          : clamp(foot.x - LOGICAL_WIDTH / 2, west, east - LOGICAL_WIDTH)),
-        y: Math.round(mapHeight <= LOGICAL_HEIGHT
-          ? -(LOGICAL_HEIGHT - mapHeight) / 2
-          : clamp(foot.y - LOGICAL_HEIGHT * .48, 0, mapHeight - LOGICAL_HEIGHT)),
-      };
-    };
-
-    const visibleRect = (left: number, top: number, width: number, height: number) => (
-      left + width >= -TILE && left <= LOGICAL_WIDTH + TILE
-      && top + height >= -TILE && top <= LOGICAL_HEIGHT + TILE
-    );
-
-    const waterGradient = context.createLinearGradient(0, 0, 0, LOGICAL_HEIGHT);
-    waterGradient.addColorStop(0, "#79b9be");
-    waterGradient.addColorStop(.52, "#2d7771");
-    waterGradient.addColorStop(1, "#0b3d3b");
-    const indoorGradient = context.createRadialGradient(
-      LOGICAL_WIDTH / 2,
-      LOGICAL_HEIGHT * .48,
-      80,
-      LOGICAL_WIDTH / 2,
-      LOGICAL_HEIGHT * .48,
-      LOGICAL_WIDTH * .7,
-    );
-    indoorGradient.addColorStop(0, "#16302a");
-    indoorGradient.addColorStop(.58, "#091d1a");
-    indoorGradient.addColorStop(1, "#03100f");
-
-    const drawFootShadow = (x: number, y: number, width: number, alpha = .25) => {
-      context.save();
-      context.fillStyle = `rgba(3, 16, 14, ${alpha})`;
-      context.beginPath();
-      context.ellipse(
-        Math.round(x),
-        Math.round(y - 3),
-        Math.round(clamp(width * .24, 9, 54)),
-        Math.round(clamp(width * .065, 4, 11)),
-        0,
-        0,
-        Math.PI * 2,
-      );
-      context.fill();
-      context.restore();
-    };
-
     const drawField = (now: number) => {
-      const save = saveRef.current;
-      const map = WORLD_MAPS[save.map];
-      const position = visualPosition(now);
-      const camera = cameraFor(map, position);
-      const outdoor = save.map === "village" || save.map === "forest";
-      context.fillStyle = outdoor ? waterGradient : indoorGradient;
-      context.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-
-      if (outdoor) {
-        context.save();
-        context.strokeStyle = "rgba(219, 244, 231, .15)";
-        context.lineWidth = 2;
-        for (let index = 0; index < 4; index += 1) {
-          const waveY = 118 + index * 116 + Math.sin(now / 760 + index) * 5;
-          context.beginPath();
-          context.moveTo(-24, waveY);
-          context.bezierCurveTo(220, waveY - 10, 438, waveY + 12, 700, waveY - 2);
-          context.bezierCurveTo(830, waveY - 8, 940, waveY + 7, LOGICAL_WIDTH + 24, waveY);
-          context.stroke();
-        }
-        context.restore();
+      const save=saveRef.current;
+      const key=[save.map,save.x,save.y,save.progress,save.beacons.join(),save.pedestals.join(),save.bossDefeated,save.completed].join("|");
+      if(key!==routeKey){
+        routeKey=key;destination=minaPixelNextDestination(save);
+        const path=destination?findMinaPixelPath(WORLD_MAPS[save.map],save,destination,destination.adjacent):null;
+        let x=save.x,y=save.y;routePoints=(path??[]).map(d=>{const delta=MINA_PIXEL_WORLD_DIRECTION_DELTA[d];x+=delta[0];y+=delta[1];return{x,y};});
       }
-
-      const toScreen = (point: { x: number; y: number }) => ({
-        x: Math.round(point.x - camera.x),
-        y: Math.round(point.y + fieldTopMargin - camera.y),
-      });
-      const islandInset = save.map === "village" ? 1 : 0;
-      const islandNorth = toScreen(projectMinaPixelFieldPoint(islandInset, islandInset));
-      const islandEast = toScreen(projectMinaPixelFieldPoint(map.width - islandInset, islandInset));
-      const islandSouth = toScreen(projectMinaPixelFieldPoint(map.width - islandInset, map.height - islandInset));
-      const islandWest = toScreen(projectMinaPixelFieldPoint(islandInset, map.height - islandInset));
-      const edgeDepth = fieldProfile.islandEdgeDepth;
-
-      context.save();
-      context.fillStyle = outdoor
-        ? save.map === "village" ? "#59442f" : "#2c3d2c"
-        : "#0a1513";
-      context.beginPath();
-      context.moveTo(islandWest.x, islandWest.y);
-      context.lineTo(islandSouth.x, islandSouth.y);
-      context.lineTo(islandSouth.x, islandSouth.y + edgeDepth);
-      context.lineTo(islandWest.x, islandWest.y + edgeDepth);
-      context.closePath();
-      context.fill();
-      context.fillStyle = outdoor
-        ? save.map === "village" ? "#755b3b" : "#40543a"
-        : "#14241f";
-      context.beginPath();
-      context.moveTo(islandEast.x, islandEast.y);
-      context.lineTo(islandSouth.x, islandSouth.y);
-      context.lineTo(islandSouth.x, islandSouth.y + edgeDepth);
-      context.lineTo(islandEast.x, islandEast.y + edgeDepth);
-      context.closePath();
-      context.fill();
-      context.fillStyle = outdoor ? "rgba(22, 55, 38, .52)" : "rgba(2, 12, 10, .78)";
-      context.beginPath();
-      context.moveTo(islandNorth.x, islandNorth.y);
-      context.lineTo(islandEast.x, islandEast.y);
-      context.lineTo(islandSouth.x, islandSouth.y);
-      context.lineTo(islandWest.x, islandWest.y);
-      context.closePath();
-      context.fill();
-      context.strokeStyle = outdoor ? "rgba(239, 226, 177, .45)" : "rgba(126, 167, 145, .24)";
-      context.lineWidth = 2;
-      context.stroke();
-      context.restore();
-
-      context.save();
-      context.translate(-camera.x, fieldTopMargin - camera.y);
-      context.transform(.5, .25, -.5, .25, 0, 0);
-      for (let y = 0; y < map.height; y += 1) {
-        for (let x = 0; x < map.width; x += 1) {
-          if (save.map === "village" && (x === 0 || y === 0 || x === map.width - 1 || y === map.height - 1)) continue;
-          const tileOrigin = projectMinaPixelFieldPoint(x, y);
-          const tileLeft = tileOrigin.x - fieldProfile.tileWidth / 2 - camera.x;
-          const tileRight = tileOrigin.x + fieldProfile.tileWidth / 2 - camera.x;
-          const tileTop = tileOrigin.y + fieldTopMargin - camera.y;
-          const tileBottom = tileTop + fieldProfile.tileDepth;
-          if (tileRight < -TILE || tileLeft > LOGICAL_WIDTH + TILE
-            || tileBottom < -TILE || tileTop > LOGICAL_HEIGHT + TILE) continue;
-          const image = imagesRef.current[TILE_ASSET[map.tiles[y][x]]];
-          if (image) {
-            context.drawImage(
-              image,
-              x * fieldProfile.tileWidth,
-              y * fieldProfile.tileWidth,
-              fieldProfile.tileWidth,
-              fieldProfile.tileWidth,
-            );
-          }
-        }
-      }
-      context.restore();
-
-      type DrawEntry = { y: number; order: number; draw: () => void };
-      const entries: DrawEntry[] = [];
-      let drawOrder = 0;
-      map.props.forEach((prop) => {
-        if (save.chests.includes(prop.id) && prop.asset === "propChest") return;
-        if (save.collected.includes(prop.id) && prop.id.startsWith("acorn")) return;
-        const foot = projectedFoot(prop.x, prop.y);
-        const footX = Math.round(foot.x - camera.x);
-        const footY = Math.round(foot.y - camera.y);
-        const left = Math.round(footX - prop.width / 2);
-        const top = Math.round(footY - prop.height);
-        if (!visibleRect(left, top, prop.width, prop.height)) return;
-        entries.push({
-          y: foot.y,
-          order: drawOrder++,
-          draw: () => {
-            drawFootShadow(footX, footY, prop.width, prop.asset === "propLantern" ? .16 : .22);
-            drawImage(prop.asset, left, top, prop.width, prop.height);
-          },
-        });
-      });
-      map.npcs.forEach((npc) => {
-        const foot = projectedFoot(npc.x, npc.y);
-        const footX = Math.round(foot.x - camera.x);
-        const footY = Math.round(foot.y - camera.y);
-        const left = Math.round(footX - ACTOR_WIDTH / 2);
-        const top = Math.round(footY - ACTOR_HEIGHT);
-        if (!visibleRect(left, top, ACTOR_WIDTH, ACTOR_HEIGHT)) return;
-        entries.push({
-          y: foot.y,
-          order: drawOrder++,
-          draw: () => {
-            drawFootShadow(footX, footY, ACTOR_WIDTH);
-            drawImage(npc.asset, left, top, ACTOR_WIDTH, ACTOR_HEIGHT);
-          },
-        });
-      });
-      const minaFoot = projectedFoot(position.x, position.y);
-      const minaFootX = Math.round(minaFoot.x - camera.x);
-      const minaFootY = Math.round(minaFoot.y - camera.y);
-      const minaLeft = Math.round(minaFootX - ACTOR_WIDTH / 2);
-      const minaTop = Math.round(minaFootY - ACTOR_HEIGHT - position.bob);
-      entries.push({
-        y: minaFoot.y + 1,
-        order: drawOrder++,
-        draw: () => {
-          drawFootShadow(minaFootX, minaFootY, ACTOR_WIDTH, .3);
-          drawImage(MINA_ASSET[save.direction], minaLeft, minaTop, ACTOR_WIDTH, ACTOR_HEIGHT);
-        },
-      });
-      entries.sort((a, b) => a.y - b.y || a.order - b.order).forEach((entry) => entry.draw());
-
-      context.fillStyle = "rgba(4, 21, 18, .88)";
-      context.fillRect(12, 12, 344, 46);
-      context.strokeStyle = "#d9b75a";
-      context.strokeRect(12.5, 12.5, 343, 45);
-      context.fillStyle = "#f2e6bd";
-      context.font = "bold 19px ui-monospace, monospace";
-      context.fillText(map.name, 28, 42);
-      if (save.map === "depths" && !save.bossDefeated) {
-        const pulse = .55 + Math.sin(now / 240) * .2;
-        context.fillStyle = `rgba(43, 19, 49, ${pulse})`;
-        context.fillRect(0, 0, LOGICAL_WIDTH, 6);
-      }
+      scene.draw(now,save,visualPosition(now),destination,routePoints,walkingToRef.current);
     };
-
     const drawBattle = (now: number, battleState: BattleState) => {
-      const boss = battleState.enemies.some((enemy) => enemy.kind === "boss");
-      const background = boss ? "tileStoneFloor" : "tileForestFloor";
-      for (let y = 0; y < LOGICAL_HEIGHT; y += TILE) {
-        for (let x = 0; x < LOGICAL_WIDTH; x += TILE) drawImage(background, x, y, TILE, TILE);
-      }
-      context.fillStyle = boss ? "rgba(20, 8, 28, .55)" : "rgba(7, 27, 20, .42)";
-      context.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-      const battleLayout = MINA_PIXEL_BATTLE_LAYOUT;
-      drawImage(
-        "minaRight",
-        battleLayout.mina.x,
-        battleLayout.mina.y + Math.sin(now / 220) * 3,
-        battleLayout.mina.width,
-        battleLayout.mina.height,
-      );
-      const alive = battleState.enemies.filter((enemy) => enemy.hp > 0);
-      alive.forEach((enemy, index) => {
-        const width = enemy.kind === "boss" ? battleLayout.boss.size : battleLayout.normalEnemy.size;
-        const height = width;
-        const x = enemy.kind === "boss" ? battleLayout.boss.x : battleLayout.normalEnemy.startX + index * battleLayout.normalEnemy.gapX;
-        const y = enemy.kind === "boss" ? battleLayout.boss.y : battleLayout.normalEnemy.y + (index % 2) * battleLayout.normalEnemy.staggerY;
-        if (battleState.bossCharging && enemy.kind === "boss") {
-          context.fillStyle = `rgba(242, 190, 72, ${.2 + Math.sin(now / 100) * .12})`;
-          context.beginPath();
-          context.arc(x + width / 2, y + height / 2, 118, 0, Math.PI * 2);
-          context.fill();
-        }
-        drawImage(enemy.asset, x, y, width, height);
-        context.fillStyle = "rgba(3, 15, 13, .86)";
-        context.fillRect(x - 8, y + height + 10, width + 16, battleLayout.hpPanelHeight);
-        context.fillStyle = "#f2e6bd";
-        context.font = "bold 16px ui-monospace, monospace";
-        context.fillText(enemy.name, x, y + height + 29);
-        context.fillStyle = "#2f3e36";
-        context.fillRect(x, y + height + 35, width, 7);
-        context.fillStyle = "#d85d50";
-        context.fillRect(x, y + height + 35, width * enemy.hp / enemy.maxHp, 7);
-      });
-      context.fillStyle = "rgba(4, 21, 18, .9)";
-      context.fillRect(battleLayout.messagePanel.x, battleLayout.messagePanel.y, battleLayout.messagePanel.width, battleLayout.messagePanel.height);
-      context.strokeStyle = "#d9b75a";
-      context.strokeRect(
-        battleLayout.messagePanel.x + .5,
-        battleLayout.messagePanel.y + .5,
-        battleLayout.messagePanel.width - 1,
-        battleLayout.messagePanel.height - 1,
-      );
-      context.fillStyle = "#f2e6bd";
-      context.font = "18px ui-monospace, monospace";
-      const message = battleState.message.length > 68 ? `${battleState.message.slice(0, 68)}…` : battleState.message;
-      context.fillText(message, 34, 46);
-      context.fillStyle = "#9fcab4";
-      context.fillText(`TURN ${battleState.turn}  ${battleState.phase === "player" ? "ミナの行動" : battleState.phase === "enemy" ? "敵の行動" : "戦闘終了"}`, 34, 72);
+      scene.battle(now,saveRef.current,battleState.enemies,battleState.bossCharging);
     };
 
     const attemptPortal = () => {
@@ -1640,6 +1447,26 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       if (direction) beginWorldMove(direction, now);
     };
 
+    let pointerStart: {x:number;y:number}|null = null;
+    const pointerdown = (event: PointerEvent) => { pointerStart={x:event.clientX,y:event.clientY}; };
+    const pointerup = (event: PointerEvent) => {
+      const start=pointerStart;
+      pointerStart=null;
+      if(!start||Math.hypot(event.clientX-start.x,event.clientY-start.y)>12)return;
+      if(movementRef.current||dialogueRef.current||menuRef.current||shopRef.current||battleRef.current)return;
+      const rect=canvas.getBoundingClientRect();
+      const target=scene.hitTest((event.clientX-rect.left)*canvas.width/rect.width,(event.clientY-rect.top)*canvas.height/rect.height);
+      const save=saveRef.current,map=WORLD_MAPS[save.map];
+      const adjacent=!isMinaPixelTileWalkable(map,target.x,target.y);
+      const path=findMinaPixelPath(map,save,target,adjacent);
+      if(!path){setNavigationNotice("そこへは歩けません。道の上を選んでください。");return;}
+      setNavigationNotice("");moveQueueRef.current=path;walkingToRef.current=target;screenCommandRequestedRef.current=null;
+      SCREEN_DIRECTIONS.forEach(d=>{inputRef.current[d]=false;});
+      screenHoldSuppressedRef.current=true;
+      if(!path.length)interactionRequested.current=true;
+      else beginNextQueuedMove(performance.now());
+    };
+
     const issueScreenMove = (screenDirection: MinaPixelScreenDirection, now: number) => {
       if (movementRef.current || moveQueueRef.current.length > 0
         || dialogueRef.current || menuRef.current || shopRef.current || battleRef.current) return;
@@ -1707,6 +1534,7 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
         }
       }
       context.imageSmoothingEnabled = false;
+      if(!movementRef.current&&moveQueueRef.current.length===0)walkingToRef.current=null;
       const currentBattle = battleRef.current;
       if (currentBattle) drawBattle(now, currentBattle);
       else drawField(now);
@@ -1720,6 +1548,7 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       if (screenDirection) {
         if (!inputRef.current[screenDirection] && !event.repeat) {
           if (!dialogueRef.current && !menuRef.current && !shopRef.current && !battleRef.current) {
+            moveQueueRef.current=[];walkingToRef.current=null;
             screenHoldSuppressedRef.current = false;
             screenCommandRequestedRef.current = screenDirection;
           }
@@ -1747,6 +1576,7 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       };
       screenCommandRequestedRef.current = null;
       moveQueueRef.current = [];
+      walkingToRef.current = null;
       screenHoldSuppressedRef.current = false;
     };
     const visibility = () => {
@@ -1761,9 +1591,14 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       }
     };
     const resize = () => {
-      const width = canvas.parentElement?.clientWidth ?? LOGICAL_WIDTH;
-      canvas.style.height = `${Math.round(Math.min(width, LOGICAL_WIDTH) * LOGICAL_HEIGHT / LOGICAL_WIDTH)}px`;
+      const host=canvas.parentElement;if(!host)return;
+      const width=Math.max(640,Math.min(1440,host.clientWidth));
+      canvas.width=Math.round(width);canvas.height=Math.round(width*host.clientHeight/Math.max(1,host.clientWidth));
     };
+    const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas.parentElement!);
+    canvas.addEventListener("pointerdown",pointerdown);
+    canvas.addEventListener("pointerup",pointerup);
+    const pointercancel=()=>{pointerStart=null;};canvas.addEventListener("pointercancel",pointercancel);
     window.addEventListener("keydown", keydown, { passive: false });
     window.addEventListener("keyup", keyup);
     window.addEventListener("blur", stopInput);
@@ -1778,6 +1613,8 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       window.removeEventListener("blur", stopInput);
       window.removeEventListener("resize", resize);
       document.removeEventListener("visibilitychange", visibility);
+      resizeObserver.disconnect();scene.dispose();
+      canvas.removeEventListener("pointerdown",pointerdown);canvas.removeEventListener("pointerup",pointerup);canvas.removeEventListener("pointercancel",pointercancel);
       stopInput();
       if (battleTimerRef.current !== null) window.clearTimeout(battleTimerRef.current);
       persist("終了地点を保存しました");
@@ -1794,6 +1631,8 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       if (!dialogueRef.current && !menuRef.current && !shopRef.current && !battleRef.current) {
+        moveQueueRef.current = [];
+        walkingToRef.current = null;
         screenHoldSuppressedRef.current = false;
         screenCommandRequestedRef.current = direction;
       }
@@ -1811,14 +1650,16 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
   const currentStats = statsFor(snapshot);
   const currentMapName = WORLD_MAPS[snapshot.map].name;
   const xpNext = snapshot.level >= 6 ? "MAX" : xpForLevel(snapshot.level + 1);
+  const nextDestination=minaPixelNextDestination(snapshot);
+  const nearbyTarget=interactionTarget(snapshot);
 
   return (
-    <section className="jrpg-root" aria-label="ミナと星苔の方位盤 第一章 北をなくした森">
+    <section className={`jrpg-root starmoss-root${battle ? " starmoss-in-battle" : ""}`} aria-label="ミナと星苔の方位盤 第一章 北をなくした森">
       <div className="jrpg-statusbar">
-        <div><small>LOCATION</small><strong>{currentMapName}</strong></div>
-        <div><small>MINA</small><strong>Lv.{snapshot.level}</strong></div>
-        <div><small>HP</small><strong>{snapshot.hp} / {maxHpForLevel(snapshot.level)}</strong></div>
-        <div><small>SP</small><strong>{snapshot.sp} / {maxSpForLevel(snapshot.level)}</strong></div>
+        <div className="starmoss-location"><small>星苔の方位盤 <span>ASTRA EDITION</span></small><strong>{currentMapName}</strong></div>
+        <div className="starmoss-mina"><i aria-hidden="true" /><div><small>旅する研究員</small><strong>ミナ <em>Lv.{snapshot.level}</em></strong></div></div>
+        <div><small>体力 <b>{snapshot.hp} / {maxHpForLevel(snapshot.level)}</b></small><div className="starmoss-meter"><i style={{width:`${snapshot.hp/maxHpForLevel(snapshot.level)*100}%`}} /></div></div>
+        <div><small>研究力 <b>{snapshot.sp} / {maxSpForLevel(snapshot.level)}</b></small><div className="starmoss-meter sp"><i style={{width:`${snapshot.sp/maxSpForLevel(snapshot.level)*100}%`}} /></div></div>
         <div><small>木貨</small><strong>{snapshot.gold}</strong></div>
       </div>
 
@@ -1828,14 +1669,15 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
           className="jrpg-canvas"
           width={LOGICAL_WIDTH}
           height={LOGICAL_HEIGHT}
-          aria-label="実際のPNGピクセル素材で描画する、ミナの見下ろし型2D JRPG画面"
-          style={{ width: "100%", maxWidth: LOGICAL_WIDTH, height: "auto", imageRendering: "pixelated", touchAction: "none" }}
+          aria-label="ミナの2D探索画面。道をタップして移動できます"
         />
-        {!assetsReady && !error && <div className="jrpg-loading">41点のピクセル素材を読み込んでいます…</div>}
+        {!assetsReady && !error && <div className="jrpg-loading"><span>星苔の灯りをたどっています…</span></div>}
         {error && <div className="jrpg-error">{error}</div>}
+        {!dialogue&&!battle&&!menuOpen&&!shopOpen&&<div className="starmoss-field-caption"><span>道をタップして歩く</span>{navigationNotice&&<p role="status">{navigationNotice}</p>}</div>}
 
         {dialogue && (
           <button className="jrpg-dialogue" onClick={advanceDialogue} aria-label="会話を進める">
+            <i className="starmoss-dialogue-portrait" aria-hidden="true" style={{backgroundImage:`url(${ASSET_URLS[Object.values(WORLD_MAPS).flatMap(m=>m.npcs).find(n=>n.name===dialogue.speaker)?.asset??"minaDown"]})`}} />
             <small>{dialogue.speaker}</small>
             <span>{dialogue.pages[dialogue.index]}</span>
             <b>{dialogue.index + 1} / {dialogue.pages.length}　▼</b>
@@ -1881,6 +1723,7 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
 
         {battle && (
           <div className="jrpg-battle-ui" aria-label="コマンド式ターン戦闘">
+            <div className="starmoss-battle-message" role="status"><small>TURN {battle.turn} · {battle.phase==="player"?"ミナの行動":battle.phase==="enemy"?"相手の行動":"戦闘終了"}</small><p>{battle.message}</p></div>
             <div className="jrpg-targets">
               {battle.enemies.map((enemy, index) => (
                 <button key={enemy.uid} disabled={enemy.hp <= 0 || battle.phase !== "player"} className={battle.selected === index ? "selected" : ""} onClick={() => selectTarget(index)}>
@@ -1920,7 +1763,17 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
       </div>
 
       <div className="jrpg-objective">
-        <span>CHAPTER 01</span><strong>{objectiveFor(snapshot)}</strong><small>{saveStatus}</small>
+        <span>第一章 · 北をなくした森</span><h2>旅の方位盤</h2>
+        <strong>{objectiveFor(snapshot)}</strong>
+        <StarMossMap map={WORLD_MAPS[snapshot.map]} position={snapshot} target={nextDestination} />
+        {nextDestination&&<p className="starmoss-destination">次の場所 <b>{nextDestination.label}</b></p>}
+        <ol className="starmoss-chapter-steps">
+          <li className={snapshot.progress>0?"done":"current"}><span>01</span>方位盤を受け取る</li>
+          <li className={snapshot.beacons.length===3?"done":snapshot.progress>0?"current":""}><span>02</span>三つの標光 <b>{snapshot.beacons.length}/3</b></li>
+          <li className={snapshot.pedestals.length===3?"done":snapshot.beacons.length===3?"current":""}><span>03</span>方角を結ぶ <b>{snapshot.pedestals.length}/3</b></li>
+          <li className={snapshot.completed?"done":snapshot.pedestals.length===3?"current":""}><span>04</span>森に北を返す</li>
+        </ol>
+        <small className="starmoss-save-note">{saveStatus}</small>
       </div>
 
       <div className="jrpg-touch" aria-label="タッチ操作">
@@ -1950,7 +1803,7 @@ export default function MinaPixelRPGGame({ onClear }: Props) {
         <div className="jrpg-action-buttons">
           <button className="jrpg-menu-button" onClick={() => menuHandlerRef.current()}>メニュー<br /><small>M</small></button>
           <button className="jrpg-cancel-button" onClick={() => cancelHandlerRef.current()}>取消<br /><small>X</small></button>
-          <button className="jrpg-confirm-button" onClick={() => confirmHandlerRef.current()}>決定・調べる<br /><small>Z / Enter</small></button>
+          <button className="jrpg-confirm-button" onClick={() => confirmHandlerRef.current()}>{dialogue?"続きを読む":battle?"決定":nearbyTarget?.label??"調べる"}<br /><small>Z / Enter</small></button>
         </div>
       </div>
       <p className="jrpg-help">移動：十字キー / WASD　斜め：Q↖・E↗・C↙・V↘　決定：Z / Enter　取消：X / Esc　メニュー：M　進行・戦闘後・マップ移動時に自動保存</p>

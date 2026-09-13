@@ -29,6 +29,7 @@ test("renders the Mori Lab game collection", async () => {
   const brawler2d = await readFile(new URL("../app/Brawler2DGame.tsx", import.meta.url), "utf8");
   const rpg3d = await readFile(new URL("../app/MinaRPGGame.tsx", import.meta.url), "utf8");
   const rpg2d = await readFile(new URL("../app/MinaPixelRPGGame.tsx", import.meta.url), "utf8");
+  const starMossScene = await readFile(new URL("../app/starMossScene.ts", import.meta.url), "utf8");
   const diorama3d = await readFile(new URL("../app/MinaDioramaRPGGame.tsx", import.meta.url), "utf8");
   const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
   const rpgSocialCard = await stat(new URL("../public/og-rpg-v1.png", import.meta.url));
@@ -213,12 +214,16 @@ test("renders the Mori Lab game collection", async () => {
   assert.match(rpg2d, /rowSkew: -32/);
   assert.match(rpg2d, /islandEdgeDepth: 28/);
   assert.match(rpg2d, /mode: "isometric-diorama"/);
-  assert.match(rpg2d, /context\.transform\(\.5, \.25, -\.5, \.25, 0, 0\)/);
-  assert.match(rpg2d, /const islandInset = save\.map === "village" \? 1 : 0/);
-  assert.match(rpg2d, /projectMinaPixelFieldPoint\(map\.width - islandInset, map\.height - islandInset\)/);
-  assert.match(rpg2d, /context\.lineTo\(islandSouth\.x, islandSouth\.y \+ edgeDepth\)/);
-  assert.match(rpg2d, /context\.lineTo\(islandEast\.x, islandEast\.y \+ edgeDepth\)/);
-  assert.match(rpg2d, /save\.map === "village" && \(x === 0 \|\| y === 0 \|\| x === map\.width - 1 \|\| y === map\.height - 1\)\) continue/);
+  assert.match(rpg2d, /createStarMossScene\(canvas/);
+  assert.match(starMossScene, /c\.transform\(\.5, \.25, -\.5, \.25, 0, 0\)/);
+  assert.match(starMossScene, /cachedTerrain/);
+  assert.match(starMossScene, /a\.depth - b\.depth/);
+  assert.match(starMossScene, /obscures \? \.3 : 1/);
+  assert.match(starMossScene, /prefers-reduced-motion/);
+  assert.match(rpg2d, /findMinaPixelPath/);
+  assert.match(rpg2d, /recoverMinaPixelPosition\(saveRef\.current\)/);
+  assert.match(source, /window\.location\.hash === "#star-moss"/);
+  assert.match(source, /ASTRA EDITION · PIXEL JRPG/);
   assert.match(rpg2d, /type Direction = "up" \| "down" \| "left" \| "right"/);
   assert.match(rpg2d, /direction: Direction/);
   assert.match(rpg2d, /version: 1/);
@@ -252,9 +257,8 @@ test("renders the Mori Lab game collection", async () => {
     assert.match(dpadBlock[1], new RegExp(`onLostPointerCapture=\\{\\(\\) => \\{ inputRef\\.current\\.${direction} = false; \\}\\}`));
   }
   assert.match(readme, /既存セーブとの互換性を維持/);
-  assert.match(rpg2d, /MINA_PIXEL_BATTLE_LAYOUT/);
-  assert.match(rpg2d, /normalEnemy: \{ startX: 520, gapX: 170, y: 160, staggerY: 24, size: 128 \}/);
-  assert.match(rpg2d, /boss: \{ x: 650, y: 160, size: 192 \}/);
+  assert.match(starMossScene, /starMossBattleLayout\(w,h,alive\.length,boss,canvas\.clientWidth\|\|w\)/);
+  assert.match(rpg2d, /starmoss-battle-message/);
   const globalCss = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(globalCss, /\.jrpg-commands[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(globalCss, /\.jrpg-subcommands[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);

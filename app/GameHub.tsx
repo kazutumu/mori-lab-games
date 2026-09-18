@@ -239,6 +239,11 @@ function Home({ save, openGame }: { save: SaveData; openGame: (id: Mode) => void
         <span className="plaza-entry-copy"><small>公開中の操作試作 · 3Dの広場</small><strong>ミナと木陰の広場</strong><span>左スティックで歩き、茶房から木陰へお茶を届ける、小さな3D散歩。</span><em>セーブなし · 木の成長とは別の試作</em></span>
         <span className="plaza-entry-action">広場で遊ぶ →</span>
       </Link>
+      <Link className="plaza-entry" id="forest-entry" href="/forest-observatory">
+        <span className="plaza-entry-icon" aria-hidden="true">🌳</span>
+        <span className="plaza-entry-copy"><small>公開中の観測試作 · 触れて眺める3Dの森</small><strong>木漏れ日の観測林</strong><span>木に触れると鳥が羽ばたき、池に触れると魚がジャンプ。森を回して、朝・夕・蛍のいる夜を眺めよう。</span><em>セーブなし · 木の成長とは別の試作</em></span>
+        <span className="plaza-entry-action">森を眺める →</span>
+      </Link>
       <nav className="game-entry-guide" aria-label="初めて遊ぶ人向けのゲーム入口">
         <div><strong>初めての入口</strong><span>遊びたい形から絞れます。いつでも「すべて」へ戻せます。</span></div>
         <div className="game-entry-tabs" role="group" aria-label="ゲームの種類">

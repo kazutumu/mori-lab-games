@@ -26,6 +26,10 @@ test("renders the Mori Lab game collection", async () => {
   const source = await readFile(new URL("../app/GameHub.tsx", import.meta.url), "utf8");
   assert.match(source, /<Link className="plaza-entry" id="plaza-entry" href="\/mina-plaza">/);
   assert.match(source, /ミナと木陰の広場/);
+  assert.match(source, /id="forest-entry" href="\/forest-observatory"/);
+  assert.match(source, /木漏れ日の観測林/);
+  assert.ok(source.indexOf('id="forest-entry"') < source.indexOf('<nav className="game-entry-guide"'));
+  assert.match(source, /森を眺める →/);
   assert.match(source, /セーブなし · 木の成長とは別の試作/);
   assert.ok(source.indexOf('id="plaza-entry"') < source.indexOf('<nav className="game-entry-guide"'), "plaza entry stays above the game filters");
   const sailing3d = await readFile(new URL("../app/Sailing3DGame.tsx", import.meta.url), "utf8");

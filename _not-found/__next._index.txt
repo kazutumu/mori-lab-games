@@ -1,0 +1,5 @@
+1:"$Sreact.fragment"
+2:I[2798,[],""]
+3:I[9044,[],""]
+:HL["/mori-lab-games/_next/static/css/8f336f062b63bb95.css","style"]
+0:{"rsc":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/8f336f062b63bb95.css","precedence":"next"}]],["$","html",null,{"lang":"ja","children":[["$","head",null,{"children":["$","script",null,{"src":"/mori-lab-games/mori-analytics.js","defer":true}]}],["$","body",null,{"children":["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]}]]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"T7FGCAbI7GgclB6d70jK9"}

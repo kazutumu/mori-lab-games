@@ -1,0 +1,7 @@
+1:"$Sreact.fragment"
+2:I[3932,["456","static/chunks/375a538c-90b2a41ba76e4523.js","479","static/chunks/b19bb45c-9e9fb1d5759ace43.js","467","static/chunks/467-8cf02e2ad5b72665.js","525","static/chunks/525-a6ce534f38ef1c62.js","643","static/chunks/app/windmill-study/page-e9d849dc948fc074.js"],"default"]
+3:I[5927,[],"OutletBoundary"]
+4:"$Sreact.suspense"
+:HL["/mori-lab-games/_next/static/css/6d9c0b5a23014522.css","style"]
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/6d9c0b5a23014522.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"T7FGCAbI7GgclB6d70jK9"}
+5:null

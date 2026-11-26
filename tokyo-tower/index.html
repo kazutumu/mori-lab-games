@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>TOKYO TOWER — 3D SHADER & MOTION DEMO</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #05070e;
+    font-family: 'Inter', 'Noto Sans JP', sans-serif;
+    color: #f3f5f9;
+  }
+  #canvas-wrap {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+  .glass-panel {
+    background: rgba(10, 14, 24, 0.62);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+  .mode-btn {
+    transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .mode-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .mode-btn.active-landmark {
+    background: linear-gradient(135deg, rgba(255, 118, 46, 0.92), rgba(232, 68, 30, 0.92));
+    border-color: rgba(255, 198, 140, 0.8);
+    color: #fff;
+    box-shadow: 0 0 18px rgba(255, 110, 40, 0.45);
+  }
+  .mode-btn.active-diamond {
+    background: linear-gradient(135deg, rgba(96, 180, 255, 0.9), rgba(192, 110, 255, 0.9), rgba(255, 140, 180, 0.9));
+    border-color: rgba(255, 255, 255, 0.75);
+    color: #fff;
+    box-shadow: 0 0 18px rgba(170, 140, 255, 0.5);
+  }
+  .mode-btn.active-neon {
+    background: linear-gradient(135deg, rgba(0, 228, 255, 0.88), rgba(235, 38, 178, 0.9));
+    border-color: rgba(170, 248, 255, 0.8);
+    color: #fff;
+    box-shadow: 0 0 18px rgba(0, 224, 255, 0.48);
+  }
+  .mode-btn.active-sub {
+    background: rgba(255, 255, 255, 0.92);
+    color: #0b101d;
+    border-color: #fff;
+    font-weight: 600;
+  }
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    display: inline-block;
+    animation: pulseGlow 1.8s infinite ease-in-out;
+  }
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 0.45; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.25); }
+  }
+  /* スクロールバー非表示（モバイル横並び用） */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body>
+<!-- 3Dキャンバス描画領域 -->
+<div id="canvas-wrap"></div>
+
+<!-- エラー時メッセージボックス（alert不使用） -->
+<div id="error-box" class="hidden fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80">
+  <div class="glass-panel rounded-2xl p-6 max-w-md w-full text-center">
+    <h2 class="text-lg font-bold text-orange-400 mb-2">WebGLの初期化エラー</h2>
+    <p id="error-msg" class="text-sm text-slate-200 leading-relaxed"></p>
+  </div>
+</div>
+
+<!-- 左上：タイトル＆ステータスHUD -->
+<header class="fixed top-14 left-3 sm:top-5 sm:left-5 z-20 pointer-events-none max-w-[calc(100vw-24px)]">
+  <div class="glass-panel rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 pointer-events-auto">
+    <div class="flex items-center gap-2 text-[10px] sm:text-[11px] tracking-[0.2em] uppercase text-orange-300/90 font-semibold">
+      <span id="status-dot" class="pulse-dot bg-orange-400"></span>
+      <span>333M PROCEDURAL LANDMARK</span>
+    </div>
+    <h1 class="text-sm sm:text-lg font-bold tracking-wider text-white mt-0.5 leading-snug">
+      TOKYO TOWER <span class="font-normal text-slate-300/80">— 3D SHADER &amp; MOTION DEMO</span>
+    </h1>
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] text-slate-300/85">
+      <span id="mode-label">ライトアップ：ランドマーク</span>
+      <span class="opacity-40">|</span>
+      <span id="time-label">時間帯：ミッドナイト</span>
+    </div>
+  </div>
+</header>
+
+<!-- 右上：シネマティックカメラ＆リセット操作 -->
+<div class="fixed top-3 right-3 sm:top-5 sm:right-5 z-20 flex items-center gap-2">
+  <button id="btn-cinematic" class="glass-panel mode-btn active-sub rounded-full px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs flex items-center gap-1.5 cursor-pointer">
+    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <path d="M23 7l-7 5 7 5V7z"></path>
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+    </svg>
+    <span id="cinematic-text">シネマティック ON</span>
+  </button>
+</div>
+
+<!-- 下部ドック：ライトアップモード＆時間帯切替（モバイル・iPad対応） -->
+<footer class="fixed bottom-3 left-1/2 -translate-x-1/2 sm:bottom-5 z-20 w-[calc(100vw-20px)] max-w-2xl pointer-events-none">
+  <div class="glass-panel rounded-2xl p-2.5 sm:p-3 pointer-events-auto flex flex-col gap-2">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <!-- ライトアップモード切替 -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <span class="hidden md:inline text-[10px] uppercase tracking-widest text-slate-400 mr-1 shrink-0">Light</span>
+        <button id="btn-mode-landmark" class="mode-btn active-landmark rounded-xl px-3 py-2 text-xs font-medium shrink-0 cursor-pointer">
+          ランドマーク
+        </button>
+        <button id="btn-mode-diamond" class="mode-btn rounded-xl px-3 py-2 text-xs font-medium shrink-0 cursor-pointer">
+          ダイヤモンドヴェール
+        </button>
+        <button id="btn-mode-neon" class="mode-btn rounded-xl px-3 py-2 text-xs font-medium shrink-0 cursor-pointer">
+          ネオン・パルス
+        </button>
+      </div>
+
+      <!-- 区切り線（PC/タブレット） -->
+      <div class="hidden sm:block w-px h-6 bg-white/15 shrink-0"></div>
+
+      <!-- 時間帯切替 -->
+      <div class="flex items-center justify-between sm:justify-end gap-1.5">
+        <div class="flex items-center gap-1.5">
+          <button id="btn-time-twilight" class="mode-btn rounded-xl px-3 py-2 text-xs font-medium cursor-pointer">
+            トワイライト
+          </button>
+          <button id="btn-time-midnight" class="mode-btn active-sub rounded-xl px-3 py-2 text-xs font-medium cursor-pointer">
+            ミッドナイト
+          </button>
+        </div>
+        <span class="sm:hidden text-[10px] text-slate-400 pr-1">ドラッグで自由回転</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Three.js & Postprocessing importmap -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/**
+ * エラー表示用ヘルパー（alertは使用しない）
+ */
+function showError(message) {
+  const box = document.getElementById('error-box');
+  const msg = document.getElementById('error-msg');
+  if (box && msg) {
+    msg.textContent = message;
+    box.classList.remove('hidden');
+  }
+}
+
+/**
+ * 東京タワーの断面半幅を高さ y (0〜66.6, 1u = 5m) から滑らかに計算
+ * 実際の東京タワー（高さ333m, 足元幅88m, メインデッキ150m, トップデッキ250m）の優雅な指数曲線を再現
+ */
+function getTowerHalfWidth(y) {
+  if (y <= 30.0) {
+    // 地上〜メインデッキ(150m): 優雅に内側に湾曲するカーブ
+    const t = y / 30.0;
+    return 2.35 + 6.55 * Math.pow(1.0 - t, 2.15);
+  } else if (y <= 50.0) {
+    // メインデッキ〜トップデッキ(250m)
+    const t = (y - 30.0) / 20.0;
+    return 0.92 + (2.35 - 0.92) * Math.pow(1.0 - t, 1.35);
+  } else {
+    // トップデッキ〜アンテナ基部(333m)
+    const t = Math.min((y - 50.0) / 16.6, 1.0);
+    return 0.12 + (0.92 - 0.12) * Math.pow(1.0 - t, 1.6);
+  }
+}
+
+/**
+ * インターナショナルオレンジと白の紅白塗り分け（7段バンド）
+ */
+const COL_ORANGE = new THREE.Color(0xe94620);
+const COL_WHITE  = new THREE.Color(0xf2f4f7);
+
+function getTowerBandColor(y) {
+  // 地上から 紅 -> 白 -> 紅 -> 白 -> 紅 -> 白 -> 紅 の7層構造
+  if (y < 11.5) return COL_ORANGE;
+  if (y < 21.0) return COL_WHITE;
+  if (y < 30.5) return COL_ORANGE; // メインデッキ付近
+  if (y < 39.5) return COL_WHITE;
+  if (y < 48.0) return COL_ORANGE;
+  if (y < 55.0) return COL_WHITE;
+  return COL_ORANGE;
+}
+
+/**
+ * ビル群の夜景窓テクスチャをCanvasでプロシージャル生成
+ */
+function createCityWindowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#05070c';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const cols = 16;
+  const rows = 42;
+  const padX = 3;
+  const padY = 4;
+  const cellW = canvas.width / cols;
+  const cellH = canvas.height / rows;
+
+  const palette = ['#ffe7b3', '#ffd28a', '#e0f0ff', '#fff7e6', '#a8d4ff'];
+  for (let r = 1; r < rows - 1; r++) {
+    const floorLitProb = 0.22 + Math.random() * 0.45;
+    for (let c = 0; c < cols; c++) {
+      if (Math.random() < floorLitProb) {
+        ctx.fillStyle = palette[Math.floor(Math.random() * palette.length)];
+        const alpha = 0.45 + Math.random() * 0.55;
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(
+          c * cellW + padX,
+          r * cellH + padY,
+          cellW - padX * 2,
+          cellH - padY * 2
+        );
+      }
+    }
+  }
+  ctx.globalAlpha = 1.0;
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * メイン初期化関数（window.onloadから起動）
+ */
+function initApp() {
+  try {
+    const wrap = document.getElementById('canvas-wrap');
+
+    // --- シーン・カメラ・レンダラー ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x070b18, 0.0042);
+
+    const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.5, 900);
+    camera.position.set(48, 28, 62);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    wrap.appendChild(renderer.domElement);
+
+    // --- ポストプロセス（UnrealBloomPass） ---
+    const composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.88, // strength
+      0.55, // radius
+      0.24  // threshold
+    );
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
+
+    // --- OrbitControls ---
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.055;
+    controls.maxPolarAngle = Math.PI * 0.492;
+    controls.minDistance = 18;
+    controls.maxDistance = 175;
+    controls.target.set(0, 26, 0);
+
+    // --- 状態管理 ---
+    const state = {
+      mode: 0,           // 0: ランドマーク, 1: ダイヤモンドヴェール, 2: ネオン・パルス
+      targetMode: 0,
+      twilight: 0.0,     // 0: ミッドナイト, 1: トワイライト
+      targetTwilight: 0.0,
+      cinematic: true,
+      cinematicTime: 0
+    };
+
+    // ユーザーが手動ドラッグ・ズームしたらシネマティックカメラを自動でOFF
+    controls.addEventListener('start', () => {
+      if (state.cinematic) {
+        setCinematic(false);
+      }
+    });
+
+    // =========================================================================
+    // 1. カスタムGLSLシェーダーによる夜空スカイドーム
+    // =========================================================================
+    const skyUniforms = {
+      uTime: { value: 0 },
+      uTwilight: { value: 0 },
+      uModeTint: { value: new THREE.Color(0xff6b2b) }
+    };
+
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: skyUniforms,
+      vertexShader: /* glsl */ `
+        varying vec3 vWorldDir;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldDir = normalize(position);
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uTwilight;
+        uniform vec3 uModeTint;
+        varying vec3 vWorldDir;
+
+        // 3Dハッシュ（星生成用）
+        float hash31(vec3 p) {
+          p = fract(p * vec3(443.8975, 397.2973, 491.1871));
+          p += dot(p, p.yxz + 19.19);
+          return fract((p.x + p.y) * p.z);
+        }
+
+        void main() {
+          vec3 dir = normalize(vWorldDir);
+          float h = clamp(dir.y, 0.0, 1.0);
+
+          // ミッドナイト空色
+          vec3 nightZenith  = vec3(0.012, 0.020, 0.055);
+          vec3 nightMid     = vec3(0.032, 0.052, 0.115);
+          vec3 nightHorizon = vec3(0.11, 0.10, 0.16);
+
+          // トワイライト空色（夕暮れの紫〜茜グラデーション）
+          vec3 twiZenith  = vec3(0.06, 0.09, 0.24);
+          vec3 twiMid     = vec3(0.26, 0.14, 0.30);
+          vec3 twiHorizon = vec3(0.88, 0.36, 0.18);
+
+          vec3 zenith  = mix(nightZenith,  twiZenith,  uTwilight);
+          vec3 mid     = mix(nightMid,     twiMid,     uTwilight);
+          vec3 horizon = mix(nightHorizon, twiHorizon, uTwilight);
+
+          vec3 col = mix(horizon, mid, smoothstep(0.0, 0.26, h));
+          col = mix(col, zenith, smoothstep(0.22, 0.82, h));
+
+          // 地平線の東京都市光（ライトポリューション）
+          float cityGlow = exp(-h * 11.0);
+          vec3 glowColor = mix(vec3(0.26, 0.15, 0.11), vec3(0.95, 0.45, 0.22), uTwilight);
+          glowColor = mix(glowColor, uModeTint * 0.55, 0.22);
+          col += glowColor * cityGlow * 0.55;
+
+          // 西の空の残照（トワイライト時）
+          float sunDir = max(dot(dir, normalize(vec3(-0.75, 0.08, -0.65))), 0.0);
+          col += vec3(1.0, 0.52, 0.24) * pow(sunDir, 5.0) * uTwilight * 0.55;
+
+          // 瞬く星空（高度が高いほどクッキリ）
+          if (dir.y > 0.04) {
+            vec3 starGrid = floor(dir * 260.0);
+            float r = hash31(starGrid);
+            if (r > 0.9945) {
+              float twinkle = 0.55 + 0.45 * sin(uTime * (2.0 + fract(r * 97.0) * 4.5) + r * 120.0);
+              float starVis = smoothstep(0.04, 0.38, dir.y) * mix(1.0, 0.32, uTwilight);
+              vec3 starCol = mix(vec3(0.8, 0.9, 1.0), vec3(1.0, 0.92, 0.78), fract(r * 31.0));
+              col += starCol * twinkle * starVis * 1.15;
+            }
+          }
+
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `
+    });
+    const skyDome = new THREE.Mesh(new THREE.SphereGeometry(420, 32, 24), skyMat);
+    scene.add(skyDome);
+
+    // =========================================================================
+    // 2. ライティング設定
+    // =========================================================================
+    const hemiLight = new THREE.HemisphereLight(0x6b88cc, 0x16121f, 0.55);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffb480, 0.9);
+    dirLight.position.set(-55, 42, -45);
+    scene.add(dirLight);
+
+    // タワーを内側から照らすライトアップ用PointLight群
+    const towerLights = [];
+    const lightHeights = [8, 22, 36, 48, 59];
+    lightHeights.forEach((lh) => {
+      const pl = new THREE.PointLight(0xff7a2e, 26, 42, 1.45);
+      pl.position.set(0, lh, 0);
+      scene.add(pl);
+      towerLights.push(pl);
+    });
+
+    // =========================================================================
+    // 3. 東京タワーのプロシージャル3D造形（InstancedMesh活用）
+    // =========================================================================
+    const towerGroup = new THREE.Group();
+    scene.add(towerGroup);
+
+    const strutData = [];
+    const upVec = new THREE.Vector3(0, 1, 0);
+
+    /**
+     * 2点間を結ぶ鉄骨ストラットをデータ配列へ登録
+     */
+    function addStrut(p1, p2, radius, colorOverride = null) {
+      const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+      const dir = new THREE.Vector3().subVectors(p2, p1);
+      const len = dir.length();
+      if (len < 0.001) return;
+      const quat = new THREE.Quaternion().setFromUnitVectors(upVec, dir.clone().normalize());
+      const col = colorOverride ? colorOverride.clone() : getTowerBandColor(mid.y).clone();
+      strutData.push({ pos: mid, quat, scale: new THREE.Vector3(radius, len, radius), col });
+    }
+
+    // --- 3-1. 主脚・水平桁・X字トラス格子の生成 ---
+    const levels = [];
+    // 地上〜メインデッキ(30.0)まで細かく分割して滑らかな曲線を描く
+    for (let i = 0; i <= 15; i++) levels.push((i / 15) * 30.0);
+    // メインデッキ〜トップデッキ(50.0)
+    for (let i = 1; i <= 12; i++) levels.push(30.0 + (i / 12) * 20.0);
+    // トップデッキ〜アンテナ基部(57.5)
+    for (let i = 1; i <= 5; i++) levels.push(50.0 + (i / 5) * 7.5);
+
+    const cornerSigns = [
+      [-1, -1],
+      [ 1, -1],
+      [ 1,  1],
+      [-1,  1]
+    ];
+
+    for (let i = 0; i < levels.length - 1; i++) {
+      const y0 = levels[i];
+      const y1 = levels[i + 1];
+      const w0 = getTowerHalfWidth(y0);
+      const w1 = getTowerHalfWidth(y1);
+
+      const mainRadius = y0 < 30 ? 0.24 - (y0 / 30) * 0.08 : (y0 < 50 ? 0.14 : 0.09);
+      const braceRadius = mainRadius * 0.44;
+
+      // 4隅の座標
+      const c0 = cornerSigns.map(([sx, sz]) => new THREE.Vector3(sx * w0, y0, sz * w0));
+      const c1 = cornerSigns.map(([sx, sz]) => new THREE.Vector3(sx * w1, y1, sz * w1));
+
+      // 4本の主柱（太い鉄骨脚）
+      for (let k = 0; k < 4; k++) {
+        addStrut(c0[k], c1[k], mainRadius);
+        // 脚元の補強二重トラス（足元の重厚感）
+        if (y0 < 12.0) {
+          const inset0 = c0[k].clone().multiplyScalar(0.84);
+          inset0.y = y0;
+          const inset1 = c1[k].clone().multiplyScalar(0.84);
+          inset1.y = y1;
+          addStrut(inset0, inset1, mainRadius * 0.52);
+          addStrut(c0[k], inset1, braceRadius * 0.85);
+          addStrut(inset0, c1[k], braceRadius * 0.85);
+        }
+      }
+
+      // 4面の水平ビームとX字トラス
+      for (let k = 0; k < 4; k++) {
+        const next = (k + 1) % 4;
+        // 地上すぐ下(y < 8.0)はアーチ空間を作るため全面Xトラスを省く
+        if (y0 >= 7.8) {
+          addStrut(c1[k], c1[next], braceRadius * 1.15);
+          // 展望台内部はスキップ
+          const inDeck = (y0 >= 28.5 && y0 < 31.8) || (y0 >= 49.0 && y0 < 51.2);
+          if (!inDeck) {
+            // X字トラス
+            addStrut(c0[k], c1[next], braceRadius);
+            addStrut(c0[next], c1[k], braceRadius);
+
+            // 下部は2分割の細かいX格子にして精密度を上げる
+            if (y0 < 28.0) {
+              const m0 = new THREE.Vector3().lerpVectors(c0[k], c0[next], 0.5);
+              const m1 = new THREE.Vector3().lerpVectors(c1[k], c1[next], 0.5);
+              addStrut(m0, m1, braceRadius * 0.72);
+              addStrut(c0[k], m1, braceRadius * 0.65);
+              addStrut(m0, c1[k], braceRadius * 0.65);
+              addStrut(m0, c1[next], braceRadius * 0.65);
+              addStrut(c0[next], m1, braceRadius * 0.65);
+            }
+          }
+        }
+      }
+    }
+
+    // --- 3-2. 足元の優雅なアーチ構造（4面） ---
+    const archSegments = 12;
+    const archHeight = 7.4;
+    for (let side = 0; side < 4; side++) {
+      const next = (side + 1) % 4;
+      const [sx0, sz0] = cornerSigns[side];
+      const [sx1, sz1] = cornerSigns[next];
+
+      let prevInner = null;
+      let prevOuter = null;
+      for (let s = 0; s <= archSegments; s++) {
+        const u = s / archSegments;
+        const angle = u * Math.PI;
+        const ay = Math.sin(angle) * archHeight;
+        const wAtY = getTowerHalfWidth(ay);
+
+        // 面の端から端へ補間（脚の内側からスタート）
+        const t = 0.14 + u * 0.72;
+        const px = THREE.MathUtils.lerp(sx0, sx1, t) * wAtY;
+        const pz = THREE.MathUtils.lerp(sz0, sz1, t) * wAtY;
+
+        const innerPt = new THREE.Vector3(px, ay, pz);
+        const outerY = Math.min(ay + 1.35, 8.2);
+        const wOut = getTowerHalfWidth(outerY);
+        const outerPt = new THREE.Vector3(
+          THREE.MathUtils.lerp(sx0, sx1, t) * wOut,
+          outerY,
+          THREE.MathUtils.lerp(sz0, sz1, t) * wOut
+        );
+
+        if (prevInner && prevOuter) {
+          addStrut(prevInner, innerPt, 0.18, COL_ORANGE);
+          addStrut(prevOuter, outerPt, 0.12, COL_ORANGE);
+          addStrut(innerPt, outerPt, 0.09, COL_ORANGE);
+          addStrut(prevInner, outerPt, 0.08, COL_ORANGE);
+        }
+        prevInner = innerPt;
+        prevOuter = outerPt;
+      }
+    }
+
+    // 鉄骨InstancedMeshの生成（1ドローコールで全トラスを描画）
+    const strutGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1);
+    const strutMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.42,
+      metalness: 0.58,
+      emissive: new THREE.Color(0x2a0f05),
+      emissiveIntensity: 0.45
+    });
+    const strutInst = new THREE.InstancedMesh(strutGeo, strutMat, strutData.length);
+    const dummy = new THREE.Object3D();
+    strutData.forEach((d, idx) => {
+      dummy.position.copy(d.pos);
+      dummy.quaternion.copy(d.quat);
+      dummy.scale.copy(d.scale);
+      dummy.updateMatrix();
+      strutInst.setMatrixAt(idx, dummy.matrix);
+      strutInst.setColorAt(idx, d.col);
+    });
+    strutInst.instanceMatrix.needsUpdate = true;
+    strutInst.instanceColor.needsUpdate = true;
+    towerGroup.add(strutInst);
+
+    // --- 3-3. フットタウン（足元ビル） ---
+    const footTownGroup = new THREE.Group();
+    const ftMat = new THREE.MeshStandardMaterial({ color: 0x1b202e, roughness: 0.65, metalness: 0.3 });
+    const ftBase = new THREE.Mesh(new THREE.BoxGeometry(12.2, 3.2, 12.2), ftMat);
+    ftBase.position.y = 1.6;
+    footTownGroup.add(ftBase);
+
+    const ftRoof = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.35, 12.6), new THREE.MeshStandardMaterial({ color: 0x2a3245, roughness: 0.5 }));
+    ftRoof.position.y = 3.35;
+    footTownGroup.add(ftRoof);
+
+    // フットタウンの発光窓帯
+    const ftWinMat = new THREE.MeshStandardMaterial({
+      color: 0xffdfaa,
+      emissive: 0xffb357,
+      emissiveIntensity: 1.5
+    });
+    [1.1, 2.3].forEach((wy) => {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(12.32, 0.38, 12.32), ftWinMat);
+      strip.position.y = wy;
+      footTownGroup.add(strip);
+    });
+    towerGroup.add(footTownGroup);
+
+    // --- 3-4. メインデッキ（150m・2層構造＋光る展望窓） ---
+    const mainDeckGroup = new THREE.Group();
+    mainDeckGroup.position.y = 30.0;
+
+    const deckBodyMat = new THREE.MeshStandardMaterial({
+      color: 0xf0f3f7,
+      roughness: 0.38,
+      metalness: 0.45,
+      emissive: 0x221814,
+      emissiveIntensity: 0.35
+    });
+    const deckGlassMat = new THREE.MeshStandardMaterial({
+      color: 0xfff0d4,
+      emissive: 0xffba66,
+      emissiveIntensity: 1.85,
+      roughness: 0.15,
+      metalness: 0.2
+    });
+
+    // 2層構造（下層＋上層）
+    const mdLower = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1.3, 6.4), deckBodyMat);
+    mdLower.position.y = -0.65;
+    mainDeckGroup.add(mdLower);
+
+    const mdWin1 = new THREE.Mesh(new THREE.BoxGeometry(6.55, 0.52, 6.55), deckGlassMat);
+    mdWin1.position.y = -0.58;
+    mainDeckGroup.add(mdWin1);
+
+    const mdUpper = new THREE.Mesh(new THREE.BoxGeometry(6.8, 1.35, 6.8), deckBodyMat);
+    mdUpper.position.y = 0.72;
+    mainDeckGroup.add(mdUpper);
+
+    const mdWin2 = new THREE.Mesh(new THREE.BoxGeometry(6.95, 0.56, 6.95), deckGlassMat);
+    mdWin2.position.y = 0.72;
+    mainDeckGroup.add(mdWin2);
+
+    // メインデッキ上下のライトアップ・リムリング
+    const deckRimMat = new THREE.MeshBasicMaterial({ color: 0xff9a44 });
+    const mdRimTop = new THREE.Mesh(new THREE.BoxGeometry(7.05, 0.14, 7.05), deckRimMat);
+    mdRimTop.position.y = 1.44;
+    const mdRimBot = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.14, 6.6), deckRimMat);
+    mdRimBot.position.y = -1.32;
+    mainDeckGroup.add(mdRimTop, mdRimBot);
+    towerGroup.add(mainDeckGroup);
+
+    // --- 3-5. トップデッキ（250m・コンパクト展望台） ---
+    const topDeckGroup = new THREE.Group();
+    topDeckGroup.position.y = 50.0;
+
+    const tdBody = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.7, 3.2), deckBodyMat);
+    topDeckGroup.add(tdBody);
+
+    const tdWin = new THREE.Mesh(new THREE.BoxGeometry(3.34, 0.72, 3.34), deckGlassMat);
+    tdWin.position.y = 0.08;
+    topDeckGroup.add(tdWin);
+
+    const tdRim = new THREE.Mesh(new THREE.BoxGeometry(3.42, 0.12, 3.42), deckRimMat);
+    tdRim.position.y = 0.9;
+    topDeckGroup.add(tdRim);
+    towerGroup.add(topDeckGroup);
+
+    // --- 3-6. 最上部アンテナ＆点滅する航空障害灯 ---
+    const antMatWhite = new THREE.MeshStandardMaterial({ color: 0xf4f6f9, roughness: 0.35, metalness: 0.65 });
+    const antMatOrange = new THREE.MeshStandardMaterial({ color: 0xe94620, roughness: 0.35, metalness: 0.65 });
+
+    const antSections = [
+      { y0: 57.5, y1: 60.5, r0: 0.34, r1: 0.26, mat: antMatOrange },
+      { y0: 60.5, y1: 63.5, r0: 0.26, r1: 0.16, mat: antMatWhite },
+      { y0: 63.5, y1: 66.6, r0: 0.14, r1: 0.05, mat: antMatOrange }
+    ];
+    antSections.forEach((s) => {
+      const h = s.y1 - s.y0;
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(s.r1, s.r0, h, 10), s.mat);
+      mesh.position.y = s.y0 + h * 0.5;
+      towerGroup.add(mesh);
+    });
+
+    // アンテナ水平リング
+    [59.0, 61.5, 63.8].forEach((ry, idx) => {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.62 - idx * 0.14, 0.055, 8, 20),
+        antMatWhite
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = ry;
+      towerGroup.add(ring);
+    });
+
+    // 航空障害灯（赤く点滅）
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff1a1a });
+    const beaconTop = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), beaconMat);
+    beaconTop.position.y = 66.8;
+    towerGroup.add(beaconTop);
+
+    const beaconMidPositions = [
+      [0.95, 50.9, 0.95], [-0.95, 50.9, -0.95],
+      [3.3, 31.5, 3.3], [-3.3, 31.5, -3.3]
+    ];
+    beaconMidPositions.forEach(([bx, by, bz]) => {
+      const bm = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), beaconMat);
+      bm.position.set(bx, by, bz);
+      towerGroup.add(bm);
+    });
+
+    const beaconPointLight = new THREE.PointLight(0xff2020, 14, 18);
+    beaconPointLight.position.y = 66.8;
+    towerGroup.add(beaconPointLight);
+
+    // =========================================================================
+    // 4. タワーを光の帯が駆け上がるカスタムシェーダー＆LEDノード演出
+    // =========================================================================
+    // 4-1. タワーに沿った光エネルギー・シース（カスタムGLSLシェーダー）
+    const sheathProfile = [];
+    for (let i = 0; i <= 48; i++) {
+      const y = (i / 48) * 65.0;
+      // 4隅の外接半径よりわずかに外側に配置
+      const r = getTowerHalfWidth(y) * 1.46;
+      sheathProfile.push(new THREE.Vector2(r, y));
+    }
+    const sheathGeo = new THREE.LatheGeometry(sheathProfile, 4);
+    sheathGeo.rotateY(Math.PI / 4);
+
+    const pulseUniforms = {
+      uTime: { value: 0 },
+      uMode: { value: 0.0 } // 0: ランドマーク, 1: ダイヤモンドヴェール, 2: ネオン・パルス
+    };
+
+    const sheathMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: pulseUniforms,
+      vertexShader: /* glsl */ `
+        varying vec3 vPos;
+        varying vec2 vUv;
+        void main() {
+          vPos = position;
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uMode;
+        varying vec3 vPos;
+        varying vec2 vUv;
+
+        // HSV -> RGB 変換（ダイヤモンドヴェールの7色きらめき用）
+        vec3 hsv2rgb(vec3 c) {
+          vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+          vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+          return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+        }
+
+        void main() {
+          float h = clamp(vPos.y / 65.0, 0.0, 1.0);
+
+          // 駆け上がる光の帯（2重のパルス波）
+          float wave1 = smoothstep(0.08, 0.0, abs(fract(h * 1.3 - uTime * 0.24) - 0.5));
+          float wave2 = smoothstep(0.05, 0.0, abs(fract(h * 2.6 - uTime * 0.42 + 0.35) - 0.5));
+          float scanline = 0.5 + 0.5 * sin(vPos.y * 4.2 - uTime * 5.0);
+
+          // モード0: ランドマーク（温かなオレンジ〜ゴールドの光の帯）
+          vec3 col0 = mix(vec3(1.0, 0.38, 0.08), vec3(1.0, 0.78, 0.35), wave1);
+          float alpha0 = (wave1 * 0.36 + wave2 * 0.16) * (0.65 + 0.35 * scanline);
+
+          // モード1: ダイヤモンドヴェール（7層それぞれの七色きらめき）
+          float layerIdx = floor(h * 7.0) / 7.0;
+          float hue = fract(layerIdx + uTime * 0.14);
+          vec3 col1 = hsv2rgb(vec3(hue, 0.85, 1.0));
+          float sparkle = pow(0.5 + 0.5 * sin(vPos.y * 9.0 + vPos.x * 5.0 + uTime * 6.0), 4.0);
+          float alpha1 = (0.16 + wave1 * 0.42 + sparkle * 0.38);
+
+          // モード2: ネオン・パルス（シアン＆マゼンタのサイバー演出）
+          float cyberMix = 0.5 + 0.5 * sin(h * 10.0 - uTime * 3.2);
+          vec3 col2 = mix(vec3(0.0, 0.92, 1.0), vec3(1.0, 0.12, 0.72), cyberMix);
+          float gridLine = smoothstep(0.88, 0.99, sin(vPos.y * 3.2 - uTime * 6.5));
+          float alpha2 = (wave1 * 0.52 + wave2 * 0.32 + gridLine * 0.38);
+
+          // モード間ブレンド
+          vec3 finalCol = col0;
+          float finalAlpha = alpha0;
+          if (uMode < 1.0) {
+            finalCol = mix(col0, col1, uMode);
+            finalAlpha = mix(alpha0, alpha1, uMode);
+          } else {
+            float t = uMode - 1.0;
+            finalCol = mix(col1, col2, t);
+            finalAlpha = mix(alpha1, alpha2, t);
+          }
+
+          // 上下の端を滑らかにフェード
+          float edgeFade = smoothstep(0.0, 0.08, h) * smoothstep(1.0, 0.92, h);
+          gl_FragColor = vec4(finalCol, finalAlpha * edgeFade);
+        }
+      `
+    });
+    const energySheath = new THREE.Mesh(sheathGeo, sheathMat);
+    towerGroup.add(energySheath);
+
+    // 4-2. タワー各層のLEDイルミネーションノード（InstancedMesh）
+    const ledNodes = [];
+    for (let i = 1; i < levels.length - 1; i++) {
+      const y = levels[i];
+      if (y < 4.5 || y > 57.0) continue;
+      const w = getTowerHalfWidth(y) * 1.03;
+      cornerSigns.forEach(([sx, sz], ci) => {
+        ledNodes.push({
+          pos: new THREE.Vector3(sx * w, y, sz * w),
+          yNorm: y / 57.0,
+          phase: i * 0.55 + ci * 1.57
+        });
+      });
+    }
+    const ledGeo = new THREE.SphereGeometry(0.18, 6, 6);
+    const ledMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const ledInst = new THREE.InstancedMesh(ledGeo, ledMat, ledNodes.length);
+    ledNodes.forEach((n, i) => {
+      dummy.position.copy(n.pos);
+      dummy.quaternion.identity();
+      dummy.scale.setScalar(1);
+      dummy.updateMatrix();
+      ledInst.setMatrixAt(i, dummy.matrix);
+      ledInst.setColorAt(i, new THREE.Color(0xff9944));
+    });
+    ledInst.instanceMatrix.needsUpdate = true;
+    ledInst.instanceColor.needsUpdate = true;
+    towerGroup.add(ledInst);
+
+    // =========================================================================
+    // 5. 空中に舞うソフトグロー光のパーティクル（カスタムシェーダー）
+    // =========================================================================
+    const particleCount = 420;
+    const pPositions = new Float32Array(particleCount * 3);
+    const pRandoms = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const rad = 6.0 + Math.random() * 52.0;
+      pPositions[i * 3 + 0] = Math.cos(angle) * rad;
+      pPositions[i * 3 + 1] = Math.random() * 72.0;
+      pPositions[i * 3 + 2] = Math.sin(angle) * rad;
+
+      pRandoms[i * 3 + 0] = Math.random(); // phase
+      pRandoms[i * 3 + 1] = 0.5 + Math.random() * 1.4; // speed
+      pRandoms[i * 3 + 2] = 0.6 + Math.random() * 1.6; // size
+    }
+
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+    pGeo.setAttribute('aRand', new THREE.BufferAttribute(pRandoms, 3));
+
+    const particleUniforms = {
+      uTime: { value: 0 },
+      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+      uColorA: { value: new THREE.Color(0xffaa55) },
+      uColorB: { value: new THREE.Color(0xff5522) }
+    };
+
+    const pMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: particleUniforms,
+      vertexShader: /* glsl */ `
+        attribute vec3 aRand;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying float vAlpha;
+        varying float vMix;
+
+        void main() {
+          vec3 pos = position;
+          // ゆっくり上昇しながら螺旋状に漂う
+          pos.y = mod(pos.y + uTime * aRand.y * 1.45, 74.0);
+          float angle = uTime * 0.08 * aRand.y + aRand.x * 6.2831;
+          pos.x += cos(angle) * 1.2;
+          pos.z += sin(angle) * 1.2;
+
+          vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+          gl_Position = projectionMatrix * mvPos;
+          gl_PointSize = (28.0 * aRand.z * uPixelRatio) / max(-mvPos.z, 1.0);
+
+          float fadeY = smoothstep(0.0, 8.0, pos.y) * smoothstep(74.0, 56.0, pos.y);
+          float pulse = 0.45 + 0.55 * sin(uTime * 2.5 + aRand.x * 20.0);
+          vAlpha = fadeY * pulse * 0.85;
+          vMix = aRand.x;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uColorA;
+        uniform vec3 uColorB;
+        varying float vAlpha;
+        varying float vMix;
+
+        void main() {
+          float d = length(gl_PointCoord - vec2(0.5));
+          if (d > 0.5) discard;
+          float glow = pow(1.0 - d * 2.0, 2.2);
+          vec3 col = mix(uColorA, uColorB, vMix);
+          gl_FragColor = vec4(col, glow * vAlpha);
+        }
+      `
+    });
+    const glowParticles = new THREE.Points(pGeo, pMat);
+    scene.add(glowParticles);
+
+    // =========================================================================
+    // 6. 地面・道路・東京の夜景ビル群（InstancedMesh）
+    // =========================================================================
+    // 暗いアスファルト地面
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x090c14,
+      roughness: 0.88,
+      metalness: 0.15
+    });
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(280, 64), groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // 足元の芝公園プラザ（淡い間接光リング）
+    const plazaRing = new THREE.Mesh(
+      new THREE.RingGeometry(11.8, 12.25, 48),
+      new THREE.MeshBasicMaterial({ color: 0xff8c42, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
+    );
+    plazaRing.rotation.x = -Math.PI / 2;
+    plazaRing.position.y = 0.04;
+    scene.add(plazaRing);
+
+    // 夜景ビル群（380棟をInstancedMeshで高速描画）
+    const cityWindowTex = createCityWindowTexture();
+    const buildingMat = new THREE.MeshStandardMaterial({
+      color: 0x101626,
+      roughness: 0.55,
+      metalness: 0.35,
+      emissive: 0xffffff,
+      emissiveMap: cityWindowTex,
+      emissiveIntensity: 0.95
+    });
+
+    const bldgCount = 380;
+    const bldgGeo = new THREE.BoxGeometry(1, 1, 1);
+    const bldgInst = new THREE.InstancedMesh(bldgGeo, buildingMat, bldgCount);
+
+    const roofBeacons = [];
+    let bIdx = 0;
+    let attempts = 0;
+    while (bIdx < bldgCount && attempts < 2000) {
+      attempts++;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 24.0 + Math.pow(Math.random(), 0.85) * 145.0;
+      const bx = Math.cos(angle) * dist;
+      const bz = Math.sin(angle) * dist;
+
+      // 主要道路（x=±18, z=±18 の幹線道路帯）を避ける
+      if (Math.abs(Math.abs(bx) - 18) < 4.5 || Math.abs(Math.abs(bz) - 18) < 4.5) continue;
+
+      const bw = 3.2 + Math.random() * 6.5;
+      const bd = 3.2 + Math.random() * 6.5;
+      // 都心らしい高低差（中距離に高層ビル群を点在）
+      const tallChance = Math.random();
+      const bh = tallChance > 0.88 ? 16.0 + Math.random() * 20.0 : 3.5 + Math.random() * 11.5;
+
+      dummy.position.set(bx, bh * 0.5, bz);
+      dummy.quaternion.identity();
+      dummy.scale.set(bw, bh, bd);
+      dummy.updateMatrix();
+      bldgInst.setMatrixAt(bIdx, dummy.matrix);
+
+      // ビルごとの微妙な色温度バリエーション
+      const tint = new THREE.Color().setHSL(0.58 + (Math.random() - 0.5) * 0.14, 0.25, 0.65 + Math.random() * 0.35);
+      bldgInst.setColorAt(bIdx, tint);
+
+      if (bh > 20.0 && roofBeacons.length < 28) {
+        roofBeacons.push(new THREE.Vector3(bx, bh + 0.35, bz));
+      }
+      bIdx++;
+    }
+    bldgInst.count = bIdx;
+    bldgInst.instanceMatrix.needsUpdate = true;
+    bldgInst.instanceColor.needsUpdate = true;
+    scene.add(bldgInst);
+
+    // 高層ビル屋上の赤い航空障害灯
+    const roofBeaconInst = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.24, 6, 6),
+      beaconMat,
+      roofBeacons.length
+    );
+    roofBeacons.forEach((pos, idx) => {
+      dummy.position.copy(pos);
+      dummy.quaternion.identity();
+      dummy.scale.setScalar(1);
+      dummy.updateMatrix();
+      roofBeaconInst.setMatrixAt(idx, dummy.matrix);
+    });
+    roofBeaconInst.instanceMatrix.needsUpdate = true;
+    scene.add(roofBeaconInst);
+
+    // =========================================================================
+    // 7. 道路を流れる車のライト（ヘッドライト白・テールライト赤の光跡）
+    // =========================================================================
+    const roadSurfaceMat = new THREE.MeshBasicMaterial({ color: 0x121724 });
+    [18, -18].forEach((offset) => {
+      const roadX = new THREE.Mesh(new THREE.PlaneGeometry(320, 4.6), roadSurfaceMat);
+      roadX.rotation.x = -Math.PI / 2;
+      roadX.position.set(0, 0.02, offset);
+      scene.add(roadX);
+
+      const roadZ = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 320), roadSurfaceMat);
+      roadZ.rotation.x = -Math.PI / 2;
+      roadZ.position.set(offset, 0.025, 0);
+      scene.add(roadZ);
+    });
+
+    const carCount = 140;
+    const cars = [];
+    for (let i = 0; i < carCount; i++) {
+      const axis = i % 2 === 0 ? 'x' : 'z';
+      const roadSide = Math.random() < 0.5 ? 18 : -18;
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const laneOffset = dir * 1.15;
+      const isHeadlight = Math.random() < 0.5;
+      cars.push({
+        axis,
+        fixed: roadSide + laneOffset,
+        pos: (Math.random() - 0.5) * 280,
+        dir,
+        speed: 14 + Math.random() * 16,
+        len: 1.8 + Math.random() * 2.2,
+        color: isHeadlight ? new THREE.Color(0xfff4d6) : new THREE.Color(0xff2828)
+      });
+    }
+
+    const carGeo = new THREE.BoxGeometry(0.28, 0.16, 1.0);
+    const carMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const carInst = new THREE.InstancedMesh(carGeo, carMat, carCount);
+    cars.forEach((c, i) => carInst.setColorAt(i, c.color));
+    carInst.instanceColor.needsUpdate = true;
+    scene.add(carInst);
+
+    // =========================================================================
+    // 8. UIイベント・モード切替ロジック
+    // =========================================================================
+    const btnLandmark = document.getElementById('btn-mode-landmark');
+    const btnDiamond  = document.getElementById('btn-mode-diamond');
+    const btnNeon     = document.getElementById('btn-mode-neon');
+    const btnTwilight = document.getElementById('btn-time-twilight');
+    const btnMidnight = document.getElementById('btn-time-midnight');
+    const btnCinematic = document.getElementById('btn-cinematic');
+    const cinematicText = document.getElementById('cinematic-text');
+    const modeLabel = document.getElementById('mode-label');
+    const timeLabel = document.getElementById('time-label');
+    const statusDot = document.getElementById('status-dot');
+
+    function setMode(m) {
+      state.targetMode = m;
+      btnLandmark.classList.remove('active-landmark');
+      btnDiamond.classList.remove('active-diamond');
+      btnNeon.classList.remove('active-neon');
+
+      if (m === 0) {
+        btnLandmark.classList.add('active-landmark');
+        modeLabel.textContent = 'ライトアップ：ランドマーク';
+        statusDot.className = 'pulse-dot bg-orange-400';
+      } else if (m === 1) {
+        btnDiamond.classList.add('active-diamond');
+        modeLabel.textContent = 'ライトアップ：ダイヤモンドヴェール';
+        statusDot.className = 'pulse-dot bg-purple-400';
+      } else {
+        btnNeon.classList.add('active-neon');
+        modeLabel.textContent = 'ライトアップ：ネオン・パルス';
+        statusDot.className = 'pulse-dot bg-cyan-400';
+      }
+    }
+
+    function setTime(isTwilight) {
+      state.targetTwilight = isTwilight ? 1.0 : 0.0;
+      btnTwilight.classList.toggle('active-sub', isTwilight);
+      btnMidnight.classList.toggle('active-sub', !isTwilight);
+      timeLabel.textContent = isTwilight ? '時間帯：トワイライト' : '時間帯：ミッドナイト';
+    }
+
+    function setCinematic(enabled) {
+      state.cinematic = enabled;
+      btnCinematic.classList.toggle('active-sub', enabled);
+      cinematicText.textContent = enabled ? 'シネマティック ON' : 'シネマティック OFF';
+    }
+
+    btnLandmark.addEventListener('click', () => setMode(0));
+    btnDiamond.addEventListener('click',  () => setMode(1));
+    btnNeon.addEventListener('click',     () => setMode(2));
+    btnTwilight.addEventListener('click', () => setTime(true));
+    btnMidnight.addEventListener('click', () => setTime(false));
+    btnCinematic.addEventListener('click', () => setCinematic(!state.cinematic));
+
+    // =========================================================================
+    // 9. アニメーションループ
+    // =========================================================================
+    const clock = new THREE.Clock();
+    const tmpCol = new THREE.Color();
+    const tmpCamPos = new THREE.Vector3();
+    const tmpTarget = new THREE.Vector3();
+
+    const colOrangeGlow = new THREE.Color(0xff7728);
+    const colCyan       = new THREE.Color(0x00eaff);
+    const colMagenta    = new THREE.Color(0xff1eb8);
+    const fogNight      = new THREE.Color(0x070b18);
+    const fogTwilight   = new THREE.Color(0x281726);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const t = clock.elapsedTime;
+
+      // モード・時間帯の滑らかな補間
+      state.mode += (state.targetMode - state.mode) * Math.min(dt * 3.5, 1.0);
+      state.twilight += (state.targetTwilight - state.twilight) * Math.min(dt * 2.4, 1.0);
+
+      // シェーダーユニフォーム更新
+      skyUniforms.uTime.value = t;
+      skyUniforms.uTwilight.value = state.twilight;
+      pulseUniforms.uTime.value = t;
+      pulseUniforms.uMode.value = state.mode;
+      particleUniforms.uTime.value = t;
+
+      // フォグ・環境光・ブルーム強度を時間帯に合わせて調整
+      scene.fog.color.copy(fogNight).lerp(fogTwilight, state.twilight);
+      hemiLight.intensity = 0.52 + state.twilight * 0.45;
+      dirLight.intensity = 0.65 + state.twilight * 1.15;
+      bloomPass.strength = 0.92 - state.twilight * 0.22;
+
+      // ライトアップモード別のカラー演出
+      if (state.mode < 0.5) {
+        // ランドマーク（温かなオレンジ）
+        const flicker = 0.94 + 0.06 * Math.sin(t * 2.2);
+        towerLights.forEach((pl, i) => {
+          pl.color.copy(colOrangeGlow);
+          pl.intensity = (26 + Math.sin(t * 1.8 + i) * 3) * flicker;
+        });
+        deckRimMat.color.setHex(0xff9a44);
+        plazaRing.material.color.setHex(0xff8c42);
+        strutMat.emissive.setHex(0x3a1406);
+        particleUniforms.uColorA.value.setHex(0xffbb66);
+        particleUniforms.uColorB.value.setHex(0xff5a22);
+        skyUniforms.uModeTint.value.setHex(0xff6b2b);
+      } else if (state.mode < 1.5) {
+        // ダイヤモンドヴェール（各層が七色にきらめき脈打つ）
+        towerLights.forEach((pl, i) => {
+          const hue = (i / towerLights.length + t * 0.14) % 1.0;
+          pl.color.setHSL(hue, 0.88, 0.6);
+          pl.intensity = 30 + Math.sin(t * 3.5 + i * 1.1) * 7;
+        });
+        deckRimMat.color.setHSL((t * 0.18) % 1.0, 0.9, 0.65);
+        plazaRing.material.color.setHSL((t * 0.15 + 0.5) % 1.0, 0.85, 0.6);
+        strutMat.emissive.setHSL((t * 0.1) % 1.0, 0.55, 0.12);
+        particleUniforms.uColorA.value.setHSL((t * 0.16) % 1.0, 0.9, 0.72);
+        particleUniforms.uColorB.value.setHSL((t * 0.16 + 0.35) % 1.0, 0.9, 0.68);
+        skyUniforms.uModeTint.value.setHSL((t * 0.12) % 1.0, 0.7, 0.5);
+      } else {
+        // ネオン・パルス（シアン＆マゼンタのサイバー調）
+        towerLights.forEach((pl, i) => {
+          const mixVal = 0.5 + 0.5 * Math.sin(t * 3.2 - i * 0.9);
+          pl.color.copy(colCyan).lerp(colMagenta, mixVal);
+          pl.intensity = 34 + Math.sin(t * 5.0 - i) * 8;
+        });
+        deckRimMat.color.copy(colCyan).lerp(colMagenta, 0.5 + 0.5 * Math.sin(t * 2.8));
+        plazaRing.material.color.copy(colCyan);
+        strutMat.emissive.setHex(0x160a2e);
+        particleUniforms.uColorA.value.copy(colCyan);
+        particleUniforms.uColorB.value.copy(colMagenta);
+        skyUniforms.uModeTint.value.copy(colMagenta);
+      }
+
+      // LEDノードの動的更新
+      for (let i = 0; i < ledNodes.length; i++) {
+        const n = ledNodes[i];
+        if (state.mode < 0.5) {
+          const b = 0.72 + 0.28 * Math.sin(t * 2.4 - n.yNorm * 6.0);
+          tmpCol.setRGB(1.0 * b, 0.52 * b, 0.18 * b);
+        } else if (state.mode < 1.5) {
+          const hue = (Math.floor(n.yNorm * 7) / 7 + t * 0.16) % 1.0;
+          const spark = 0.55 + 0.45 * Math.sin(t * 6.0 + n.phase);
+          tmpCol.setHSL(hue, 0.95, 0.45 + spark * 0.35);
+        } else {
+          const wave = 0.5 + 0.5 * Math.sin(n.yNorm * 12.0 - t * 5.5);
+          tmpCol.copy(colCyan).lerp(colMagenta, wave);
+        }
+        ledInst.setColorAt(i, tmpCol);
+      }
+      ledInst.instanceColor.needsUpdate = true;
+
+      // 航空障害灯の赤色点滅
+      const beaconPulse = 0.25 + 0.75 * Math.pow(0.5 + 0.5 * Math.sin(t * 3.4), 3.0);
+      beaconMat.color.setRGB(beaconPulse * 1.4, beaconPulse * 0.08, beaconPulse * 0.08);
+      beaconPointLight.intensity = beaconPulse * 18.0;
+
+      // 車のライト光跡アニメーション
+      for (let i = 0; i < carCount; i++) {
+        const c = cars[i];
+        c.pos += c.dir * c.speed * dt;
+        if (c.pos > 140) c.pos = -140;
+        if (c.pos < -140) c.pos = 140;
+
+        if (c.axis === 'x') {
+          dummy.position.set(c.pos, 0.16, c.fixed);
+          dummy.rotation.set(0, Math.PI / 2, 0);
+        } else {
+          dummy.position.set(c.fixed, 0.16, c.pos);
+          dummy.rotation.set(0, 0, 0);
+        }
+        dummy.scale.set(1, 1, c.len);
+        dummy.updateMatrix();
+        carInst.setMatrixAt(i, dummy.matrix);
+      }
+      carInst.instanceMatrix.needsUpdate = true;
+
+      // シネマティックカメラ（ドローン周回・見上げ・俯瞰を滑らかに遷移）
+      if (state.cinematic) {
+        state.cinematicTime += dt;
+        const ct = state.cinematicTime;
+        const orbitAngle = ct * 0.16;
+        // 半径と高度を滑らかに変化させて、見上げ〜中景〜俯瞰をシームレスに繋ぐ
+        const radius = 52.0 + Math.sin(ct * 0.22) * 18.0;
+        const camY   = 26.0 + Math.sin(ct * 0.19 - 0.8) * 19.0;
+        const lookY  = 31.0 - Math.sin(ct * 0.19 - 0.8) * 7.5;
+
+        tmpCamPos.set(Math.cos(orbitAngle) * radius, Math.max(camY, 7.5), Math.sin(orbitAngle) * radius);
+        tmpTarget.set(0, lookY, 0);
+
+        camera.position.lerp(tmpCamPos, 0.03);
+        controls.target.lerp(tmpTarget, 0.04);
+      }
+
+      controls.update();
+      composer.render();
+    }
+
+    // --- リサイズ対応（縦横画面・iPad分割画面対応） ---
+    window.addEventListener('resize', () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      composer.setSize(w, h);
+      bloomPass.resolution.set(w, h);
+      particleUniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2);
+    });
+
+    animate();
+  } catch (err) {
+    showError('3Dシーンの読み込み中にエラーが発生しました: ' + (err?.message || err));
+  }
+}
+
+window.onload = initApp;
+</script>
+</body>
+</html>

@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>小さな灯りの村 — 自律する箱庭</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #16202a; font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; color: #f4efe6; }
+  #canvas-container { position: fixed; inset: 0; }
+
+  /* 上部ヘッダー & 時計バー */
+  .hud-top {
+    position: fixed; top: 16px; left: 16px; right: 16px;
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px;
+    pointer-events: none; z-index: 10;
+  }
+  .panel {
+    pointer-events: auto;
+    background: rgba(24, 30, 38, 0.68);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 244, 224, 0.22);
+    border-radius: 14px; padding: 12px 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+  .title-sub { font-size: 10px; letter-spacing: 0.18em; opacity: 0.72; font-family: sans-serif; }
+  .title-main { font-size: 18px; font-weight: 600; margin-top: 2px; letter-spacing: 0.06em; }
+  .clock-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-family: sans-serif; font-size: 13px; }
+  .time-badge {
+    background: rgba(255, 214, 140, 0.18); border: 1px solid rgba(255, 214, 140, 0.4);
+    padding: 3px 10px; border-radius: 999px; font-weight: 600; color: #ffe4b5;
+  }
+  .controls { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    pointer-events: auto; cursor: pointer;
+    background: rgba(255, 248, 235, 0.1); color: #f4efe6;
+    border: 1px solid rgba(255, 244, 224, 0.28); border-radius: 999px;
+    padding: 6px 12px; font-size: 12px; transition: all 0.2s ease;
+  }
+  button:hover { background: rgba(255, 248, 235, 0.22); }
+  button.active { background: #e6b86a; color: #1d2228; border-color: #e6b86a; font-weight: 600; }
+
+  /* 右下：選択中の住民カード */
+  .villager-card {
+    position: fixed; right: 16px; bottom: 16px; width: 270px;
+    z-index: 10; transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+  }
+  .villager-card.hidden { opacity: 0; transform: translateY(16px); pointer-events: none; }
+  .v-header { display: flex; justify-content: space-between; align-items: center; }
+  .v-name { font-size: 16px; font-weight: 600; }
+  .v-role { font-size: 11px; opacity: 0.75; font-family: sans-serif; margin-top: 2px; }
+  .v-status {
+    margin-top: 10px; padding: 8px 10px; border-radius: 10px;
+    background: rgba(255, 255, 255, 0.07); font-size: 13px; line-height: 1.5;
+  }
+  .v-close { padding: 2px 8px; font-size: 11px; }
+
+  /* 左下：操作ヒント */
+  .hint {
+    position: fixed; left: 16px; bottom: 16px; z-index: 10;
+    font-size: 11px; font-family: sans-serif; opacity: 0.78;
+    background: rgba(24, 30, 38, 0.55); padding: 6px 12px; border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.14); pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="hud-top">
+  <div class="panel">
+    <div class="title-sub">AUTONOMOUS DIORAMA VILLAGE</div>
+    <div class="title-main">小さな灯りの村</div>
+    <div class="clock-row">
+      <span class="time-badge" id="clock-text">07:00 朝</span>
+      <span id="weather-text" style="opacity:0.85;">パン屋の煙突から煙がのぼる</span>
+    </div>
+  </div>
+
+  <div class="panel controls">
+    <button id="btn-pause">一時停止</button>
+    <button id="btn-speed1" class="active">1x 速度</button>
+    <button id="btn-speed4">4x 早送り</button>
+    <button id="btn-reset-cam">村全体を見る</button>
+  </div>
+</div>
+
+<div class="hint">ドラッグで回転 ・ ピンチ/ホイールで拡大 ・ 村人をタップで追尾</div>
+
+<div class="panel villager-card hidden" id="villager-card">
+  <div class="v-header">
+    <div>
+      <div class="v-name" id="v-name">パン屋のマルタ</div>
+      <div class="v-role" id="v-role">パン職人 / 朝が早い</div>
+    </div>
+    <button class="v-close" id="v-close">解除</button>
+  </div>
+  <div class="v-status" id="v-status">井戸で朝の仕込み水を汲んでいます。</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// --- 基本セットアップ ---
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x9ec5d8, 0.014);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(22, 19, 24);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+container.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.maxPolarAngle = Math.PI * 0.47;
+controls.minDistance = 7;
+controls.maxDistance = 48;
+controls.target.set(0, 1.2, 0);
+
+// --- ライティング ---
+const hemiLight = new THREE.HemisphereLight(0xdff2ff, 0x5c6b48, 0.85);
+scene.add(hemiLight);
+
+const sunLight = new THREE.DirectionalLight(0xfff1d6, 2.2);
+sunLight.position.set(18, 26, 14);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 2;
+sunLight.shadow.camera.far = 70;
+const d = 22;
+sunLight.shadow.camera.left = -d;
+sunLight.shadow.camera.right = d;
+sunLight.shadow.camera.top = d;
+sunLight.shadow.camera.bottom = -d;
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+
+// --- ジオラマ土台（浮島風の箱庭ベース） ---
+const worldGroup = new THREE.Group();
+scene.add(worldGroup);
+
+// 草地の円盤
+const groundGeo = new THREE.CylinderGeometry(18, 17.5, 1.4, 48);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x769956, roughness: 0.9 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.position.y = -0.7;
+ground.receiveShadow = true;
+worldGroup.add(ground);
+
+// 土の層
+const soilGeo = new THREE.CylinderGeometry(17.5, 13.5, 2.8, 48);
+const soilMat = new THREE.MeshStandardMaterial({ color: 0x6e5541, roughness: 0.95 });
+const soil = new THREE.Mesh(soilGeo, soilMat);
+soil.position.y = -2.8;
+worldGroup.add(soil);
+
+// 小川（村の端を流れる水路）
+const streamGeo = new THREE.BoxGeometry(3.2, 0.18, 33);
+const streamMat = new THREE.MeshStandardMaterial({ color: 0x4ca3c7, roughness: 0.2, metalness: 0.1 });
+const stream = new THREE.Mesh(streamGeo, streamMat);
+stream.position.set(-8.5, 0.02, 0);
+stream.receiveShadow = true;
+worldGroup.add(stream);
+
+// 小川にかかる木の橋
+const bridge = new THREE.Mesh(
+  new THREE.BoxGeometry(4.2, 0.25, 2.2),
+  new THREE.MeshStandardMaterial({ color: 0x8b623e, roughness: 0.85 })
+);
+bridge.position.set(-8.5, 0.18, 1.5);
+bridge.castShadow = true;
+bridge.receiveShadow = true;
+worldGroup.add(bridge);
+
+// 石畳の広場と小道
+const plazaMat = new THREE.MeshStandardMaterial({ color: 0xc8c0b4, roughness: 0.88 });
+const plaza = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.7, 0.08, 32), plazaMat);
+plaza.position.set(0, 0.04, 0.5);
+plaza.receiveShadow = true;
+worldGroup.add(plaza);
+
+function addPath(x1, z1, x2, z2, width = 1.2) {
+  const dx = x2 - x1, dz = z2 - z1;
+  const len = Math.hypot(dx, dz);
+  const path = new THREE.Mesh(new THREE.BoxGeometry(width, 0.06, len), plazaMat);
+  path.position.set((x1 + x2) / 2, 0.03, (z1 + z2) / 2);
+  path.rotation.y = Math.atan2(dx, dz);
+  path.receiveShadow = true;
+  worldGroup.add(path);
+}
+
+// --- 窓の灯り管理用リスト ---
+const windowMaterials = [];
+const streetLights = [];
+
+function createHouse({ x, z, rot = 0, w = 3.2, h = 2.4, d = 3.0, wallColor = 0xf2e7d5, roofColor = 0xb55942, hasChimney = false, signColor = null }) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = rot;
+
+  // 本体
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.85 })
+  );
+  wall.position.y = h / 2;
+  wall.castShadow = true;
+  wall.receiveShadow = true;
+  g.add(wall);
+
+  // 三角屋根
+  const roofH = 1.6;
+  const roofGeo = new THREE.ConeGeometry(Math.max(w, d) * 0.78, roofH, 4);
+  const roof = new THREE.Mesh(
+    roofGeo,
+    new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.8 })
+  );
+  roof.position.y = h + roofH / 2 - 0.05;
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  g.add(roof);
+
+  // ドア
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(0.75, 1.35, 0.12),
+    new THREE.MeshStandardMaterial({ color: 0x5c3c24, roughness: 0.85 })
+  );
+  door.position.set(0, 0.68, d / 2 + 0.03);
+  g.add(door);
+
+  // 光る窓（左右2つ）
+  const winMat = new THREE.MeshStandardMaterial({
+    color: 0x3b4856,
+    emissive: 0xffb84d,
+    emissiveIntensity: 0.0,
+    roughness: 0.3
+  });
+  windowMaterials.push(winMat);
+
+  [-w * 0.28, w * 0.28].forEach(wx => {
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.6, 0.1), winMat);
+    win.position.set(wx, h * 0.58, d / 2 + 0.03);
+    g.add(win);
+  });
+
+  // 煙突
+  if (hasChimney) {
+    const chim = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 1.5, 0.55),
+      new THREE.MeshStandardMaterial({ color: 0x7a6e67, roughness: 0.9 })
+    );
+    chim.position.set(w * 0.28, h + 0.9, -d * 0.15);
+    chim.castShadow = true;
+    g.add(chim);
+  }
+
+  // お店の看板ランタン
+  if (signColor) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.8), new THREE.MeshStandardMaterial({ color: 0x2c2c2c }));
+    arm.position.set(w * 0.35, h * 0.82, d / 2 + 0.35);
+    g.add(arm);
+
+    const signMat = new THREE.MeshStandardMaterial({
+      color: signColor, emissive: signColor, emissiveIntensity: 0.35
+    });
+    windowMaterials.push(signMat);
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.12), signMat);
+    sign.position.set(w * 0.35, h * 0.68, d / 2 + 0.65);
+    g.add(sign);
+  }
+
+  worldGroup.add(g);
+  return { x, z, doorPos: new THREE.Vector3(x + Math.sin(rot) * (d / 2 + 0.8), 0, z + Math.cos(rot) * (d / 2 + 0.8)) };
+}
+
+// --- 村の建物を配置 ---
+const bakery = createHouse({ x: -3.2, z: -6.2, rot: 0.35, w: 3.8, h: 2.6, d: 3.4, wallColor: 0xf6ebd8, roofColor: 0xc45c3e, hasChimney: true, signColor: 0xffb347 });
+const tavern = createHouse({ x: 5.5, z: -5.4, rot: -0.45, w: 4.2, h: 2.9, d: 3.6, wallColor: 0xe6d5bc, roofColor: 0x4d6b53, hasChimney: true, signColor: 0xff8c42 });
+const market = createHouse({ x: 7.4, z: 2.2, rot: -1.35, w: 3.4, h: 2.3, d: 3.0, wallColor: 0xf2e4cf, roofColor: 0x527a9a, signColor: 0x7ed957 });
+const millHouse = createHouse({ x: -11.5, z: -3.5, rot: 1.2, w: 3.2, h: 3.1, d: 3.2, wallColor: 0xded9ce, roofColor: 0x6a5d54 });
+
+// 粉ひき小屋の水車（回転アニメーション用）
+const waterWheel = new THREE.Group();
+waterWheel.position.set(-9.7, 1.3, -3.5);
+const wheelRim = new THREE.Mesh(
+  new THREE.TorusGeometry(1.15, 0.12, 8, 20),
+  new THREE.MeshStandardMaterial({ color: 0x6b482b, roughness: 0.85 })
+);
+wheelRim.rotation.y = Math.PI / 2;
+waterWheel.add(wheelRim);
+for (let i = 0; i < 8; i++) {
+  const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.3, 0.14), new THREE.MeshStandardMaterial({ color: 0x7c5434 }));
+  spoke.rotation.x = (i / 8) * Math.PI;
+  waterWheel.add(spoke);
+}
+worldGroup.add(waterWheel);
+
+// 村人の自宅（3軒）
+const homeA = createHouse({ x: -4.8, z: 6.8, rot: 2.6, w: 2.8, h: 2.1, d: 2.6, wallColor: 0xf4ece1, roofColor: 0x9c5243 });
+const homeB = createHouse({ x: 1.2, z: 8.2, rot: 3.0, w: 3.0, h: 2.2, d: 2.6, wallColor: 0xebe3d5, roofColor: 0x6b705c });
+const homeC = createHouse({ x: 6.8, z: 7.2, rot: -2.4, w: 2.8, h: 2.1, d: 2.6, wallColor: 0xf5ebd9, roofColor: 0xb06d3b });
+
+// 小道をつなぐ
+[bakery, tavern, market, homeA, homeB, homeC].forEach(b => addPath(0, 0.5, b.doorPos.x, b.doorPos.z, 1.1));
+addPath(-3.2, -6.2, -8.5, 1.5, 1.0);
+addPath(-8.5, 1.5, millHouse.doorPos.x, millHouse.doorPos.z, 1.0);
+
+// --- 中央の井戸とベンチ ---
+const wellGroup = new THREE.Group();
+wellGroup.position.set(-0.6, 0, 0.2);
+const wellBase = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.05, 0.85, 16), new THREE.MeshStandardMaterial({ color: 0x8d8982, roughness: 0.9 }));
+wellBase.position.y = 0.42;
+wellBase.castShadow = true;
+wellGroup.add(wellBase);
+const wellWater = new THREE.Mesh(new THREE.CircleGeometry(0.78, 16), new THREE.MeshStandardMaterial({ color: 0x3b8ea5, roughness: 0.15 }));
+wellWater.rotation.x = -Math.PI / 2;
+wellWater.position.y = 0.72;
+wellGroup.add(wellWater);
+const wellRoof = new THREE.Mesh(new THREE.ConeGeometry(1.25, 0.9, 4), new THREE.MeshStandardMaterial({ color: 0x8a4f36 }));
+wellRoof.position.y = 2.15;
+wellRoof.rotation.y = Math.PI / 4;
+wellGroup.add(wellRoof);
+[-0.75, 0.75].forEach(px => {
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.3, 0.12), new THREE.MeshStandardMaterial({ color: 0x5c3c24 }));
+  post.position.set(px, 1.3, 0);
+  wellGroup.add(post);
+});
+worldGroup.add(wellGroup);
+
+// 広場のベンチ2脚
+function createBench(x, z, rot) {
+  const b = new THREE.Group();
+  b.position.set(x, 0, z);
+  b.rotation.y = rot;
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.55), new THREE.MeshStandardMaterial({ color: 0x8c5e38 }));
+  seat.position.y = 0.45;
+  seat.castShadow = true;
+  b.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.45, 0.1), new THREE.MeshStandardMaterial({ color: 0x7a502e }));
+  back.position.set(0, 0.72, -0.22);
+  b.add(back);
+  worldGroup.add(b);
+  return new THREE.Vector3(x, 0, z);
+}
+const bench1 = createBench(2.4, 1.6, -0.7);
+const bench2 = createBench(-2.6, 2.2, 0.9);
+
+// 市場の木箱（生活感小物）
+[[5.6, 1.3, 0xd9534f], [5.9, 1.8, 0xf0ad4e], [5.4, 2.1, 0x5cb85c]].forEach(([cx, cz, col]) => {
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.55), new THREE.MeshStandardMaterial({ color: 0x9c6f44 }));
+  crate.position.set(cx, 0.22, cz);
+  crate.castShadow = true;
+  worldGroup.add(crate);
+  const goods = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), new THREE.MeshStandardMaterial({ color: col }));
+  goods.position.set(cx, 0.46, cz);
+  worldGroup.add(goods);
+});
+
+// 街灯（夜に自動で点灯）
+function createLampPost(x, z) {
+  const lp = new THREE.Group();
+  lp.position.set(x, 0, z);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.5, 8), new THREE.MeshStandardMaterial({ color: 0x2f353b }));
+  pole.position.y = 1.25;
+  pole.castShadow = true;
+  lp.add(pole);
+
+  const bulbMat = new THREE.MeshStandardMaterial({
+    color: 0xfff0cc, emissive: 0xffaa33, emissiveIntensity: 0
+  });
+  windowMaterials.push(bulbMat);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), bulbMat);
+  bulb.position.y = 2.6;
+  lp.add(bulb);
+
+  const pt = new THREE.PointLight(0xffaa44, 0, 9);
+  pt.position.set(x, 2.6, z);
+  scene.add(pt);
+  streetLights.push(pt);
+  worldGroup.add(lp);
+}
+createLampPost(-2.2, -2.5);
+createLampPost(3.3, -2.2);
+createLampPost(3.6, 3.8);
+createLampPost(-3.5, 4.2);
+
+// 木々を周囲に配置
+function createTree(x, z, scale = 1) {
+  const t = new THREE.Group();
+  t.position.set(x, 0, z);
+  t.scale.setScalar(scale);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.3, 8), new THREE.MeshStandardMaterial({ color: 0x6b4c35 }));
+  trunk.position.y = 0.65;
+  trunk.castShadow = true;
+  t.add(trunk);
+  const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.25, 2.6, 8), new THREE.MeshStandardMaterial({ color: 0x4c7c48, roughness: 0.85 }));
+  leaves.position.y = 2.2;
+  leaves.castShadow = true;
+  t.add(leaves);
+  worldGroup.add(t);
+}
+[
+  [-13, 5, 1.1], [-12, -9, 1.2], [-6, -12, 1.0], [1, -13, 1.25],
+  [10, -10, 1.15], [13, -2, 1.0], [12, 6, 1.2], [-1, 13, 1.1], [-10, 10, 1.0]
+].forEach(([x, z, s]) => createTree(x, z, s));
+
+// --- 煙突の煙パーティクル（モーショングラフィックス演出） ---
+const smokeParticles = [];
+const smokeGeo = new THREE.SphereGeometry(0.22, 8, 8);
+const smokeMat = new THREE.MeshStandardMaterial({ color: 0xf7f5f0, transparent: true, opacity: 0.55, roughness: 1 });
+for (let i = 0; i < 18; i++) {
+  const m = new THREE.Mesh(smokeGeo, smokeMat.clone());
+  const isBakery = i % 2 === 0;
+  const origin = isBakery ? new THREE.Vector3(-2.1, 4.2, -6.7) : new THREE.Vector3(6.6, 4.5, -5.9);
+  m.userData = { origin, phase: Math.random() * Math.PI * 2, speed: 0.5 + Math.random() * 0.35 };
+  worldGroup.add(m);
+  smokeParticles.push(m);
+}
+
+// --- 自律する村人たちの生成 ---
+const villagers = [];
+const pickableMeshes = [];
+
+function createVillagerMesh(coatColor, hatColor) {
+  const root = new THREE.Group();
+
+  // 体（マント・服）
+  const body = new THREE.Mesh(
+    new THREE.ConeGeometry(0.36, 1.05, 12),
+    new THREE.MeshStandardMaterial({ color: coatColor, roughness: 0.8 })
+  );
+  body.position.y = 0.55;
+  body.castShadow = true;
+  root.add(body);
+
+  // 頭
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.25, 14, 14),
+    new THREE.MeshStandardMaterial({ color: 0xf5d6ba, roughness: 0.7 })
+  );
+  head.position.y = 1.22;
+  head.castShadow = true;
+  root.add(head);
+
+  // 帽子や頭巾（ファンタジーの生活感アクセント）
+  const hat = new THREE.Mesh(
+    new THREE.ConeGeometry(0.28, 0.36, 12),
+    new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.85 })
+  );
+  hat.position.y = 1.48;
+  hat.rotation.z = -0.12;
+  root.add(hat);
+
+  // 頭上の感情・会話アイコン（立ち話中や作業中にふわっと浮かぶ）
+  const bubble = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.14, 0),
+    new THREE.MeshStandardMaterial({ color: 0xffe07d, emissive: 0xffb732, emissiveIntensity: 0.6 })
+  );
+  bubble.position.y = 1.92;
+  bubble.visible = false;
+  root.add(bubble);
+
+  // タップ判定用の透明カプセル
+  const hitBox = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 0.55, 2.0, 8),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  hitBox.position.y = 1.0;
+  root.add(hitBox);
+
+  worldGroup.add(root);
+  return { root, body, head, bubble, hitBox };
+}
+
+const villagerSpecs = [
+  {
+    name: 'パン屋のマルタ', role: 'パン職人 / 朝が一番忙しい',
+    coat: 0xd97b54, hat: 0xf7f2e7,
+    home: homeA.doorPos, work: bakery.doorPos,
+    schedule: [
+      { start: 5.5, end: 7.0, target: () => new THREE.Vector3(-1.4, 0, 0.4), text: '井戸でパン生地用の水を汲んでいます。' },
+      { start: 7.0, end: 13.0, target: () => bakery.doorPos, text: 'パン屋の窯で香ばしい丸パンを焼いています。' },
+      { start: 13.0, end: 15.0, target: () => bench2, text: '広場のベンチでひと休みしています。' },
+      { start: 15.0, end: 18.5, target: () => bakery.doorPos, text: '夕方の焼き上がり分を店頭に並べています。' },
+      { start: 18.5, end: 21.0, target: () => tavern.doorPos, text: '仕事終わりに酒場の前で一息ついています。' },
+      { start: 21.0, end: 24.0, target: () => homeA.doorPos, text: '自宅へ帰り、明日の仕込みに備えて眠っています。', sleep: true },
+      { start: 0.0, end: 5.5, target: () => homeA.doorPos, text: '自宅のベッドでぐっすり眠っています。', sleep: true }
+    ]
+  },
+  {
+    name: '粉ひきのトビアス', role: '水車小屋の番人 / のんびり屋',
+    coat: 0x5c7d99, hat: 0x3b4d5e,
+    home: homeB.doorPos, work: millHouse.doorPos,
+    schedule: [
+      { start: 6.5, end: 12.5, target: () => millHouse.doorPos, text: '水車の回り具合を点検しながら小麦を挽いています。' },
+      { start: 12.5, end: 14.5, target: () => bakery.doorPos, text: '挽きたての小麦粉をパン屋へ届けています。' },
+      { start: 14.5, end: 17.5, target: () => millHouse.doorPos, text: '小川のせせらぎを聞きながら粉袋を整理しています。' },
+      { start: 17.5, end: 21.5, target: () => tavern.doorPos, text: '酒場の暖かな灯りの下で夕食をとっています。' },
+      { start: 21.5, end: 24.0, target: () => homeB.doorPos, text: '家に帰ってランプを消し、休んでいます。', sleep: true },
+      { start: 0.0, end: 6.5, target: () => homeB.doorPos, text: '自宅で静かに眠っています。', sleep: true }
+    ]
+  },
+  {
+    name: '朝市のクララ', role: '野菜と薬草の商人 / おしゃべり好き',
+    coat: 0x6b9963, hat: 0xe8c77b,
+    home: homeC.doorPos, work: market.doorPos,
+    schedule: [
+      { start: 6.0, end: 12.0, target: () => new THREE.Vector3(5.2, 0, 1.8), text: '木箱に採れたての赤い果実と薬草を並べています。' },
+      { start: 12.0, end: 14.0, target: () => new THREE.Vector3(0.4, 0, 1.3), text: '井戸端で村の噂話に花を咲かせています。' },
+      { start: 14.0, end: 18.0, target: () => market.doorPos, text: '夕飯の買い物客に笑顔で声をかけています。' },
+      { start: 18.0, end: 20.5, target: () => bench1, text: '夕涼みをしながら今日の売上を数えています。' },
+      { start: 20.5, end: 24.0, target: () => homeC.doorPos, text: '自宅へ戻って明日の仕入れ帳をつけています。', sleep: true },
+      { start: 0.0, end: 6.0, target: () => homeC.doorPos, text: '自宅で夢を見ています。', sleep: true }
+    ]
+  },
+  {
+    name: '酒場のハンス', role: '宿屋「緑屋根亭」の店主',
+    coat: 0x8c564b, hat: 0x4a352f,
+    home: tavern.doorPos, work: tavern.doorPos,
+    schedule: [
+      { start: 7.5, end: 10.0, target: () => new THREE.Vector3(5.2, 0, 1.8), text: '朝市で今夜のシチュー用の野菜を仕入れています。' },
+      { start: 10.0, end: 12.0, target: () => new THREE.Vector3(-1.4, 0, 0.4), text: '井戸で樽を洗いながら鼻歌を歌っています。' },
+      { start: 12.0, end: 22.5, target: () => tavern.doorPos, text: '酒場のランタンに火を灯し、客を迎えています。' },
+      { start: 22.5, end: 24.0, target: () => tavern.doorPos, text: '店の戸締まりをして2階の寝室へ上がりました。', sleep: true },
+      { start: 0.0, end: 7.5, target: () => tavern.doorPos, text: '宿屋の2階で眠っています。', sleep: true }
+    ]
+  },
+  {
+    name: '村の世話役エルマ', role: '長老見習い / 村の見回り',
+    coat: 0x7d6b91, hat: 0x564866,
+    home: homeB.doorPos, work: bench1,
+    schedule: [
+      { start: 6.5, end: 9.5, target: () => new THREE.Vector3(-7.8, 0, 1.5), text: '小川の橋の欄干が緩んでいないか見回っています。' },
+      { start: 9.5, end: 13.5, target: () => bench1, text: '広場のベンチに座って村の様子を見守っています。' },
+      { start: 13.5, end: 17.0, target: () => new THREE.Vector3(0.5, 0, -1.2), text: '広場をゆっくり散歩しながら挨拶を交わしています。' },
+      { start: 17.0, end: 20.0, target: () => new THREE.Vector3(3.3, 0, -2.0), text: '街灯に明かりが灯るのを確かめています。' },
+      { start: 20.0, end: 24.0, target: () => homeB.doorPos, text: '自宅の暖炉の前で本を読んで過ごしています。', sleep: true },
+      { start: 0.0, end: 6.5, target: () => homeB.doorPos, text: '自宅で静かに休んでいます。', sleep: true }
+    ]
+  }
+];
+
+villagerSpecs.forEach((spec, idx) => {
+  const mesh = createVillagerMesh(spec.coat, spec.hat);
+  const startPos = spec.home.clone();
+  mesh.root.position.copy(startPos);
+  mesh.hitBox.userData.villagerIndex = idx;
+  pickableMeshes.push(mesh.hitBox);
+
+  villagers.push({
+    ...spec,
+    mesh,
+    pos: startPos,
+    speed: 1.55 + (idx % 3) * 0.15,
+    phase: idx * 1.3,
+    currentText: '',
+    isSleeping: false,
+    chatTimer: 0
+  });
+});
+
+// --- 時間進行 & UIコントロール ---
+let gameHour = 7.0; // 朝7時からスタート
+let timeScale = 1.0; // 1x = 90秒で1日（24時間）
+let isPaused = false;
+let selectedVillager = null;
+
+const clockText = document.getElementById('clock-text');
+const weatherText = document.getElementById('weather-text');
+const vCard = document.getElementById('villager-card');
+const vName = document.getElementById('v-name');
+const vRole = document.getElementById('v-role');
+const vStatus = document.getElementById('v-status');
+
+document.getElementById('btn-pause').addEventListener('click', (e) => {
+  isPaused = !isPaused;
+  e.target.textContent = isPaused ? '再開する' : '一時停止';
+  e.target.classList.toggle('active', isPaused);
+});
+document.getElementById('btn-speed1').addEventListener('click', () => {
+  timeScale = 1.0;
+  document.getElementById('btn-speed1').classList.add('active');
+  document.getElementById('btn-speed4').classList.remove('active');
+});
+document.getElementById('btn-speed4').addEventListener('click', () => {
+  timeScale = 4.0;
+  document.getElementById('btn-speed4').classList.add('active');
+  document.getElementById('btn-speed1').classList.remove('active');
+});
+document.getElementById('btn-reset-cam').addEventListener('click', () => {
+  selectedVillager = null;
+  vCard.classList.add('hidden');
+});
+document.getElementById('v-close').addEventListener('click', () => {
+  selectedVillager = null;
+  vCard.classList.add('hidden');
+});
+
+// タップ・クリックで村人を選択
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let downPos = { x: 0, y: 0 };
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  downPos = { x: e.clientX, y: e.clientY };
+});
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 8) return; // ドラッグ操作は無視
+  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(pickableMeshes);
+  if (hits.length > 0) {
+    const idx = hits[0].object.userData.villagerIndex;
+    selectedVillager = villagers[idx];
+    vName.textContent = selectedVillager.name;
+    vRole.textContent = selectedVillager.role;
+    vStatus.textContent = selectedVillager.currentText;
+    vCard.classList.remove('hidden');
+  }
+});
+
+// --- 空とライティングの滑らかな時間遷移 ---
+const skyColors = {
+  night: new THREE.Color(0x131d2b),
+  dawn: new THREE.Color(0xe69d73),
+  day: new THREE.Color(0x8ecae6),
+  dusk: new THREE.Color(0xd97b54)
+};
+
+function updateEnvironment(hour) {
+  let sky = new THREE.Color();
+  let sunIntensity = 2.0;
+  let lampGlow = 0.0;
+  let periodLabel = '昼';
+  let ambientDesc = '広場に穏やかな陽射しが降り注いでいる';
+
+  if (hour >= 5 && hour < 7.5) {
+    const t = (hour - 5) / 2.5;
+    sky.lerpColors(skyColors.night, skyColors.dawn, Math.min(t * 1.4, 1));
+    if (t > 0.5) sky.lerp(skyColors.day, (t - 0.5) * 2);
+    sunIntensity = 0.4 + t * 1.7;
+    lampGlow = 1.0 - t;
+    periodLabel = '朝';
+    ambientDesc = 'パン屋の煙突から朝一番の煙がのぼる';
+  } else if (hour >= 7.5 && hour < 16.5) {
+    sky.copy(skyColors.day);
+    sunIntensity = 2.2;
+    lampGlow = 0.0;
+    periodLabel = '昼';
+    ambientDesc = '井戸端や朝市に村人たちの話し声が響く';
+  } else if (hour >= 16.5 && hour < 19.5) {
+    const t = (hour - 16.5) / 3.0;
+    sky.lerpColors(skyColors.day, skyColors.dusk, Math.min(t * 1.4, 1));
+    if (t > 0.55) sky.lerp(skyColors.night, (t - 0.55) * 2.2);
+    sunIntensity = 2.1 - t * 1.75;
+    lampGlow = t;
+    periodLabel = '夕暮れ';
+    ambientDesc = '茜色の空の下、街灯と酒場に灯りがともり始める';
+  } else {
+    sky.copy(skyColors.night);
+    sunIntensity = 0.28;
+    lampGlow = 1.0;
+    periodLabel = '夜';
+    ambientDesc = '家々の窓に温かい灯りがともり、静かな夜が更ける';
+  }
+
+  scene.background = sky;
+  scene.fog.color.copy(sky);
+  sunLight.intensity = sunIntensity;
+
+  // 太陽の軌道
+  const angle = ((hour - 6) / 24) * Math.PI * 2;
+  sunLight.position.set(Math.cos(angle) * 24, Math.max(Math.sin(angle) * 26, 5), 14);
+
+  // 窓の灯りと街灯のフェード
+  windowMaterials.forEach(mat => {
+    mat.emissiveIntensity = lampGlow * 1.35;
+  });
+  streetLights.forEach(pt => {
+    pt.intensity = lampGlow * 3.8;
+  });
+
+  const hh = String(Math.floor(hour)).padStart(2, '0');
+  const mm = String(Math.floor((hour % 1) * 60)).padStart(2, '0');
+  clockText.textContent = `${hh}:${mm} ${periodLabel}`;
+  weatherText.textContent = ambientDesc;
+}
+
+// --- メインループ ---
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.elapsedTime;
+
+  if (!isPaused) {
+    // 1日（24h）= 90秒ベース
+    gameHour = (gameHour + (dt / 90) * 24 * timeScale) % 24;
+  }
+
+  updateEnvironment(gameHour);
+
+  // 水車の回転
+  if (!isPaused) {
+    waterWheel.rotation.x -= dt * 0.9 * timeScale;
+  }
+
+  // 煙突の煙アニメーション
+  smokeParticles.forEach(p => {
+    const t = (elapsed * p.userData.speed + p.userData.phase) % 1;
+    p.position.set(
+      p.userData.origin.x + Math.sin(elapsed * 1.5 + p.userData.phase) * 0.25 + t * 0.4,
+      p.userData.origin.y + t * 2.6,
+      p.userData.origin.z + Math.cos(elapsed * 1.2 + p.userData.phase) * 0.2
+    );
+    const scale = 0.5 + t * 1.3;
+    p.scale.setScalar(scale);
+    p.material.opacity = (1 - t) * 0.5;
+  });
+
+  // 村人の自律行動更新
+  villagers.forEach((v, i) => {
+    const slot = v.schedule.find(s => gameHour >= s.start && gameHour < s.end) || v.schedule[0];
+    const targetPos = slot.target();
+    v.currentText = slot.text;
+
+    const toTarget = new THREE.Vector3().subVectors(targetPos, v.pos);
+    toTarget.y = 0;
+    const dist = toTarget.length();
+
+    if (!isPaused) {
+      if (dist > 0.22) {
+        // 目的地へ歩く
+        v.mesh.root.visible = true;
+        toTarget.normalize();
+        v.pos.addScaledVector(toTarget, v.speed * dt * Math.min(timeScale, 2.5));
+        v.mesh.root.position.copy(v.pos);
+
+        // 進行方向へ滑らかに回転
+        const targetRot = Math.atan2(toTarget.x, toTarget.z);
+        v.mesh.root.rotation.y = targetRot;
+
+        // 歩くときの軽快な上下ボビング
+        const bob = Math.abs(Math.sin(elapsed * 7.5 + v.phase)) * 0.08;
+        v.mesh.body.position.y = 0.55 + bob;
+        v.mesh.head.position.y = 1.22 + bob;
+        v.mesh.bubble.visible = false;
+      } else {
+        // 目的地に到着後の振る舞い
+        if (slot.sleep) {
+          // 帰宅して家の中に入った表現
+          v.mesh.root.visible = false;
+        } else {
+          v.mesh.root.visible = true;
+          // 近くに他の村人がいれば向き合って立ち話！
+          let partner = null;
+          for (let j = 0; j < villagers.length; j++) {
+            if (i === j || !villagers[j].mesh.root.visible) continue;
+            if (v.pos.distanceTo(villagers[j].pos) < 2.2) {
+              partner = villagers[j];
+              break;
+            }
+          }
+
+          if (partner) {
+            const lookDir = new THREE.Vector3().subVectors(partner.pos, v.pos);
+            v.mesh.root.rotation.y = Math.atan2(lookDir.x, lookDir.z);
+            v.mesh.bubble.visible = true;
+            v.mesh.bubble.rotation.y = elapsed * 2.5;
+            v.mesh.bubble.position.y = 1.92 + Math.sin(elapsed * 4 + v.phase) * 0.06;
+            v.currentText = `${partner.name}と立ち話をしています。`;
+          } else {
+            // 呼吸のようなゆったりした揺れ
+            const breathe = Math.sin(elapsed * 2.2 + v.phase) * 0.025;
+            v.mesh.body.position.y = 0.55 + breathe;
+            v.mesh.head.position.y = 1.22 + breathe;
+            v.mesh.bubble.visible = false;
+          }
+        }
+      }
+    }
+  });
+
+  // 追尾カメラ & ステータス更新
+  if (selectedVillager) {
+    vStatus.textContent = selectedVillager.currentText;
+    if (selectedVillager.mesh.root.visible) {
+      controls.target.lerp(new THREE.Vector3(selectedVillager.pos.x, 1.1, selectedVillager.pos.z), 0.08);
+    }
+  } else {
+    controls.target.lerp(new THREE.Vector3(0, 1.2, 0), 0.05);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>

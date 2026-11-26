@@ -1,7 +1,7 @@
 1:"$Sreact.fragment"
-2:I[8444,["10","static/chunks/10-fa06383248d10a56.js","124","static/chunks/app/sky-city/page-f68c6fd664355fa4.js"],"default"]
+2:I[8444,["10","static/chunks/10-fa06383248d10a56.js","124","static/chunks/app/sky-city/page-750067604bb10edb.js"],"default"]
 3:I[6418,[],"OutletBoundary"]
 4:"$Sreact.suspense"
 :HL["/mori-lab-games/_next/static/css/b2df17b878c00045.css","style"]
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/b2df17b878c00045.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"gYSykfbkAUOJqdZwKgWHb"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/b2df17b878c00045.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"eh83c3lAAFnXxcGblAIqz"}
 5:null

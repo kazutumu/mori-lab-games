@@ -1,7 +1,7 @@
 1:"$Sreact.fragment"
-2:I[7871,["10","static/chunks/10-fa06383248d10a56.js","389","static/chunks/app/new-games/page-c3baf59da9ba1211.js"],"default"]
+2:I[7871,["10","static/chunks/10-fa06383248d10a56.js","389","static/chunks/app/new-games/page-d47742f50e278719.js"],"default"]
 3:I[6418,[],"OutletBoundary"]
 4:"$Sreact.suspense"
 :HL["/mori-lab-games/_next/static/css/7fe3e0c82347ab1c.css","style"]
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/7fe3e0c82347ab1c.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"eh83c3lAAFnXxcGblAIqz"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/7fe3e0c82347ab1c.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"La-ldNsLk3jlzaktbYf86"}
 5:null

@@ -1,3 +1,3 @@
-:HL["/mori-lab-games/_next/static/css/acacc28cedc70b78.css","style"]
+:HL["/mori-lab-games/_next/static/css/e929455682e8beee.css","style"]
 :HL["/mori-lab-games/_next/static/css/2d2e0fd9c99b0cd7.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"forest-observatory","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"eh83c3lAAFnXxcGblAIqz"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"forest-observatory","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"La-ldNsLk3jlzaktbYf86"}

@@ -1,7 +1,7 @@
 1:"$Sreact.fragment"
-2:I[7360,["117","static/chunks/8d1d3404-8ef416f9ba5d8ad2.js","345","static/chunks/37e5b729-b4709a009e75d303.js","10","static/chunks/10-fa06383248d10a56.js","172","static/chunks/172-b335ebb4a0e4cd42.js","431","static/chunks/app/forest-observatory/page-68c7c03af4416f86.js"],"default"]
+2:I[7360,["117","static/chunks/8d1d3404-8ef416f9ba5d8ad2.js","345","static/chunks/37e5b729-b4709a009e75d303.js","10","static/chunks/10-fa06383248d10a56.js","172","static/chunks/172-b335ebb4a0e4cd42.js","431","static/chunks/app/forest-observatory/page-222ac777f472c94c.js"],"default"]
 3:I[6418,[],"OutletBoundary"]
 4:"$Sreact.suspense"
 :HL["/mori-lab-games/_next/static/css/2d2e0fd9c99b0cd7.css","style"]
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/2d2e0fd9c99b0cd7.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"eh83c3lAAFnXxcGblAIqz"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/mori-lab-games/_next/static/css/2d2e0fd9c99b0cd7.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"La-ldNsLk3jlzaktbYf86"}
 5:null

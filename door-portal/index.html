@@ -1,0 +1,2241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>どこでもドア — 3Dポータル</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;
+      background-color: #0f172a;
+      user-select: none;
+      touch-action: none;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    #canvas-container:active {
+      cursor: grabbing;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* グラスモーフィズムパネル */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.62);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .glass-chip {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      transition: all 0.2s ease;
+    }
+
+    .glass-chip:hover {
+      background: rgba(255, 255, 255, 0.22);
+      transform: translateY(-1px);
+    }
+
+    .glass-chip:active {
+      transform: translateY(0);
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    #mobile-move-pad { touch-action: none; }
+    .move-pad-btn { touch-action: none; }
+    .move-pad-btn.is-held {
+      background: rgba(56, 189, 248, 0.38);
+      border-color: rgba(125, 211, 252, 0.85);
+    }
+    @media (min-width: 1024px) and (pointer: fine) {
+      #mobile-move-pad { display: none; }
+    }
+
+    /* トースト通知アニメーション */
+    .toast-enter {
+      opacity: 0;
+      transform: translate(-50%, -14px);
+    }
+    .toast-active {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  </style>
+</head>
+<body class="text-white antialiased">
+
+  <!-- 3Dキャンバスコンテナ -->
+  <div id="canvas-container"></div>
+
+  <!-- 画面中央上部: トースト通知 -->
+  <div id="toast-message"
+       class="fixed top-5 left-1/2 z-50 pointer-events-none transition-all duration-300 toast-enter glass-panel px-4 py-2.5 rounded-full text-xs sm:text-sm font-medium text-white/95 flex items-center gap-2 max-w-[92vw] whitespace-nowrap">
+    <span id="toast-icon">🚪</span>
+    <span id="toast-text">準備完了</span>
+  </div>
+
+  <!-- 左上: ステータス・オフライン表示・ツールボタン -->
+  <div class="fixed top-4 left-4 z-30 flex flex-col gap-2 items-start">
+    <div class="flex items-center gap-2 flex-wrap">
+      <div class="glass-panel rounded-full px-3.5 py-2 flex items-center gap-2 text-xs sm:text-sm font-medium">
+        <span id="location-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"></span>
+        <span id="location-label">白いギャラリー空間</span>
+      </div>
+
+      <button id="btn-sound" title="効果音のオン/オフ"
+              class="glass-panel rounded-full p-2.5 text-white/85 hover:text-white hover:bg-white/15 transition">
+        <svg id="icon-sound-on" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z" />
+        </svg>
+        <svg id="icon-sound-off" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+        </svg>
+      </button>
+
+      <button id="btn-reset-cam" title="視点を正面に戻す"
+              class="glass-panel rounded-full p-2.5 text-white/85 hover:text-white hover:bg-white/15 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
+
+      <button id="btn-toggle-pad" title="移動パッドの表示切替" aria-label="移動パッドの表示切替" aria-controls="mobile-move-pad"
+              class="glass-panel rounded-full p-2.5 text-white/85 hover:text-white hover:bg-white/15 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M3 12h18M12 3l-3 3m3-3l3 3M12 21l-3-3m3 3l3-3M3 12l3-3m-3 3l3 3M21 12l-3-3m3 3l-3 3" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- 生成方法の表示 -->
+    <div class="glass-panel rounded-full px-3 py-1 text-[10px] sm:text-[11px] text-emerald-200/95 flex items-center gap-1.5">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+      <span>景色は端末内で生成（API不要）</span>
+    </div>
+  </div>
+
+  <!-- 右上: 世界情報カード＆解釈タグ＆操作ガイド -->
+  <div class="fixed top-24 right-4 lg:top-4 z-30 flex flex-col items-end gap-2 max-w-[270px] sm:max-w-xs pointer-events-none">
+    <div id="world-info-card" class="glass-panel rounded-2xl p-3.5 sm:p-4 transition-all duration-300 opacity-0 translate-y-[-8px] w-full">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <span id="world-mode-badge" class="text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-sky-500/30 text-sky-200 border border-sky-400/35">
+          キーワード解析
+        </span>
+        <span class="text-[10px] text-white/55">ポータル展開中</span>
+      </div>
+      <h2 id="world-title" class="text-sm sm:text-base font-bold text-white leading-snug"></h2>
+      <p id="world-desc" class="text-[11px] sm:text-xs text-white/75 mt-1 leading-relaxed"></p>
+      <!-- オフラインエンジンが解釈した要素タグ -->
+      <div id="world-tags" class="flex flex-wrap gap-1 mt-2.5 pt-2 border-t border-white/10"></div>
+    </div>
+
+    <!-- PC向け操作ガイド -->
+    <div class="glass-panel rounded-xl px-3 py-2 text-[11px] text-white/75 hidden lg:flex flex-col gap-0.5 pointer-events-auto">
+      <div><span class="text-white font-medium">ドラッグ</span>：360° 視点を見渡す</div>
+      <div><span class="text-white font-medium">WASD / 矢印</span>：歩く・ドアをくぐる</div>
+    </div>
+  </div>
+
+  <!-- 画面下部: メイン操作パネル（折りたたみ可能） -->
+  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94vw] max-w-2xl flex flex-col items-center gap-2 pointer-events-none">
+    <!-- タッチ端末（モバイル・iPad）向け移動パッド -->
+    <div id="mobile-move-pad" class="self-end flex flex-col items-center gap-1.5">
+      <button data-move="forward" aria-label="前進"
+              class="move-pad-btn pointer-events-auto glass-panel w-12 h-12 rounded-full flex items-center justify-center text-white/95 active:bg-white/30">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>
+      </button>
+      <div class="flex items-center gap-1.5">
+        <button data-move="left" aria-label="左移動"
+                class="move-pad-btn pointer-events-auto glass-panel w-12 h-12 rounded-full flex items-center justify-center text-white/95 active:bg-white/30">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <button data-move="backward" aria-label="後退"
+                class="move-pad-btn pointer-events-auto glass-panel w-12 h-12 rounded-full flex items-center justify-center text-white/95 active:bg-white/30">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <button data-move="right" aria-label="右移動"
+                class="move-pad-btn pointer-events-auto glass-panel w-12 h-12 rounded-full flex items-center justify-center text-white/95 active:bg-white/30">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 折りたたみトグル -->
+    <button id="btn-toggle-panel"
+            class="glass-panel pointer-events-auto rounded-full px-4 py-1.5 text-xs text-white/85 hover:text-white flex items-center gap-1.5 transition">
+      <svg id="toggle-chevron" class="w-3.5 h-3.5 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+      <span id="toggle-label">UIを隠して3Dを広く見る</span>
+    </button>
+
+    <!-- コントロールパネル本体 -->
+    <div id="control-panel" class="glass-panel pointer-events-auto rounded-3xl p-3.5 sm:p-4 w-full transition-all duration-300">
+      <!-- プリセットチップ -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2.5 mb-2.5 border-b border-white/10">
+        <span class="text-[11px] text-white/55 shrink-0 mr-1">プリセット:</span>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="夕暮れの桜とお城">🏯 夕暮れの桜とお城</button>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="オーロラの雪山">🌌 オーロラの雪山</button>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="ネオン輝く夜の東京">🗼 ネオン輝く夜の東京</button>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="満天の星空と海">🌊 満天の星空と海</button>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="霧の竹林と赤い鳥居">⛩️ 霧の竹林と赤い鳥居</button>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="宇宙のクリスタル遺跡">💎 宇宙のクリスタル遺跡</button>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="夕焼けの砂漠とピラミッド">🏜️ 夕焼けの砂漠とピラミッド</button>
+        <button class="preset-chip glass-chip rounded-full px-3 py-1.5 text-xs text-white/95 shrink-0" data-prompt="火の粉が舞う火山の古代遺跡">🌋 火山の古代遺跡</button>
+      </div>
+
+      <!-- 入力フォーム＋生成ボタン＋ランダムボタン -->
+      <form id="portal-form" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div class="relative flex-1">
+          <input id="destination-input"
+                 type="text"
+                 autocomplete="off"
+                 placeholder="行きたい場所を入力（例：雪の降る竹林と鳥居、夕焼けの海とヤシの木）"
+                 class="w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/45 focus:outline-none focus:ring-2 focus:ring-sky-400/75 focus:bg-white/15 transition" />
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btn-open-door" type="submit"
+                  class="flex-1 sm:flex-none rounded-2xl px-4 sm:px-5 py-3 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 active:scale-[0.98] transition shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-1.5">
+            <span>🚪</span>
+            <span>世界を生成して開ける</span>
+          </button>
+          <button id="btn-random" type="button" title="ランダムな世界を生成"
+                  class="rounded-2xl px-3.5 py-3 text-sm font-medium text-white/95 bg-white/12 hover:bg-white/22 border border-white/15 active:scale-[0.98] transition flex items-center justify-center gap-1 shrink-0">
+            <span>🎲</span>
+            <span class="hidden sm:inline">ランダム</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- ドア操作バー（くぐる／開閉） -->
+      <div id="door-actions" class="mt-2.5 pt-2.5 border-t border-white/10 flex items-center justify-between gap-2">
+        <button id="btn-enter-exit"
+                class="flex-1 rounded-2xl px-4 py-2.5 text-xs sm:text-sm font-semibold text-white bg-emerald-500/85 hover:bg-emerald-400 active:scale-[0.98] transition flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 disabled:opacity-45">
+          <span id="enter-exit-icon">🚶</span>
+          <span id="enter-exit-text">ドアをくぐって中へ入る</span>
+        </button>
+        <button id="btn-toggle-door"
+                class="rounded-2xl px-4 py-2.5 text-xs sm:text-sm font-medium text-white/95 bg-white/12 hover:bg-white/22 border border-white/15 active:scale-[0.98] transition shrink-0">
+          ドアを開ける
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. 定数とアプリケーション状態
+    // =========================================================================
+    const DOOR_WIDTH = 2.05;
+    const DOOR_HEIGHT = 3.25;
+    const EYE_HEIGHT = 1.65;
+    const OPEN_ANGLE = -Math.PI * 0.63; // 手前(+Z側)に約113度開く
+
+    const state = {
+      inWorld: false,            // false: 白いギャラリー空間 / true: 生成された異空間
+      doorOpen: false,           // ドアの開閉目標状態
+      doorAngle: 0,              // 現在の開き角度
+      targetDoorAngle: 0,        // 目標角度
+      soundEnabled: true,
+      panelCollapsed: false,
+      currentWorldData: null,
+      // カメラ視点
+      yaw: 0,
+      pitch: 0.02,
+      lookPointerId: null,
+      lastPointerX: 0,
+      lastPointerY: 0,
+      // 移動入力
+      heldKeys: new Set(),
+      padPointers: new Map(),
+      // 自動歩行（ドアをくぐるボタン用）
+      autoWalk: {
+        active: false,
+        targetPos: new THREE.Vector3(),
+        targetYaw: 0,
+        targetPitch: 0
+      },
+      portalCooldown: 0,
+      glowPulse: 0
+    };
+
+    const movementKeys = new Map([
+      ['KeyW', 'forward'], ['ArrowUp', 'forward'],
+      ['KeyS', 'backward'], ['ArrowDown', 'backward'],
+      ['KeyA', 'left'], ['ArrowLeft', 'left'],
+      ['KeyD', 'right'], ['ArrowRight', 'right']
+    ]);
+
+    // Three.js オブジェクト
+    let renderer, camera, clock;
+    let homeScene, portalScene, maskScene;
+    let doorGroup, doorPivot, doorGlowMesh;
+    let portalMaskFront, portalMaskBack;
+    let portalDynamicGroup;
+
+    // アニメーション対象リスト
+    let animatedWaterMesh = null;
+    let animatedAuroraMesh = null;
+    let animatedFloaters = [];
+    let animatedPlanets = [];
+    let particleSystem = null;
+    let particleMeta = null;
+
+    // Web Audio API
+    let audioCtx = null;
+
+    // =========================================================================
+    // 2. 決定論的ハッシュ＆疑似乱数ジェネレーター（自由入力用）
+    // =========================================================================
+    function hashString(str) {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function createSeededRng(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function hslToHex(h, s, l) {
+      const c = new THREE.Color().setHSL((((h % 360) + 360) % 360) / 360, s, l);
+      return '#' + c.getHexString();
+    }
+
+    // =========================================================================
+    // 3. 完全オフライン効果音（Web Audio API）
+    // =========================================================================
+    function ensureAudioContext() {
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playDoorSound(isOpening) {
+      if (!state.soundEnabled) return;
+      try {
+        ensureAudioContext();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        if (isOpening) {
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.exponentialRampToValueAtTime(320, now + 0.34);
+        } else {
+          osc.frequency.setValueAtTime(260, now);
+          osc.frequency.exponentialRampToValueAtTime(105, now + 0.26);
+        }
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.075, now + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.38);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.4);
+      } catch (e) {}
+    }
+
+    function playPortalChord(isEntering = true) {
+      if (!state.soundEnabled) return;
+      try {
+        ensureAudioContext();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        const notes = isEntering
+          ? [392.0, 493.88, 587.33, 783.99, 987.77] // Gメジャー9th系の幻想的和音
+          : [523.25, 440.0, 392.0, 329.63];
+        notes.forEach((freq, i) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          const start = now + i * 0.055;
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.0008, start);
+          gain.gain.linearRampToValueAtTime(0.045, start + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.0006, start + 0.85);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(start);
+          osc.stop(start + 0.9);
+        });
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // 4. プロシージャルテクスチャ生成（画像ファイル不使用）
+    // =========================================================================
+    function createWoodTexture() {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#8b5a3c';
+      ctx.fillRect(0, 0, 512, 512);
+      for (let i = 0; i < 160; i++) {
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(46, 25, 13, 0.15)' : 'rgba(186, 135, 96, 0.14)';
+        ctx.fillRect(Math.random() * 512, 0, 1 + Math.random() * 4, 512);
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function createGalleryGridTexture() {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#f3f6fa';
+      ctx.fillRect(0, 0, 512, 512);
+      ctx.strokeStyle = 'rgba(100, 116, 139, 0.16)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i <= 512; i += 64) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(38, 38);
+      return tex;
+    }
+
+    function createCityRoadTexture(accentHex) {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0d101c';
+      ctx.fillRect(0, 0, 512, 512);
+      ctx.strokeStyle = accentHex || '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 0.45;
+      for (let i = 0; i <= 512; i += 64) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(34, 34);
+      return tex;
+    }
+
+    function createBuildingWindowTexture(baseHex, accentHex) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = baseHex || '#131829';
+      ctx.fillRect(0, 0, 256, 512);
+      const cols = 6, rows = 16, px = 10, py = 10;
+      const w = (256 - px * (cols + 1)) / cols;
+      const h = (512 - py * (rows + 1)) / rows;
+      for (let r = 0; r < rows; r++) {
+        for (let col = 0; col < cols; col++) {
+          if (Math.random() > 0.32) {
+            ctx.fillStyle = Math.random() > 0.3 ? (accentHex || '#38bdf8') : '#fef08a';
+            ctx.globalAlpha = 0.4 + Math.random() * 0.6;
+            ctx.fillRect(px + col * (w + px), py + r * (h + py), w, h);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function createStoneWallTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#57534e';
+      ctx.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 256; y += 32) {
+        const offset = (y / 32) % 2 === 0 ? 0 : 24;
+        for (let x = -24; x < 256; x += 48) {
+          const shade = 95 + Math.floor(Math.random() * 35);
+          ctx.fillStyle = `rgb(${shade}, ${shade - 4}, ${shade - 8})`;
+          ctx.fillRect(x + offset + 2, y + 2, 44, 28);
+        }
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(3, 2);
+      return tex;
+    }
+
+    function createSkyDome(topHex, midHex, bottomHex) {
+      const geo = new THREE.SphereGeometry(185, 32, 24);
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          topColor: { value: new THREE.Color(topHex) },
+          midColor: { value: new THREE.Color(midHex || bottomHex) },
+          bottomColor: { value: new THREE.Color(bottomHex) }
+        },
+        vertexShader: `
+          varying vec3 vWorldPos;
+          void main() {
+            vec4 wp = modelMatrix * vec4(position, 1.0);
+            vWorldPos = wp.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 midColor;
+          uniform vec3 bottomColor;
+          varying vec3 vWorldPos;
+          void main() {
+            float h = normalize(vWorldPos).y;
+            vec3 col = mix(bottomColor, midColor, smoothstep(-0.05, 0.28, h));
+            col = mix(col, topColor, smoothstep(0.25, 0.85, h));
+            gl_FragColor = vec4(col, 1.0);
+          }
+        `,
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false
+      });
+      return new THREE.Mesh(geo, mat);
+    }
+
+    // =========================================================================
+    // 5. 高度なオフライン日本語キーワード解析＆合成エンジン
+    // =========================================================================
+    function analyzePromptOffline(rawInput) {
+      const text = (rawInput || '').trim() || '静かな緑の森';
+      const lower = text.toLowerCase();
+      const seed = hashString(text);
+      const rng = createSeededRng(seed);
+
+      const tags = [];
+      let matchedAny = false;
+
+      // --- A. 時間帯・空・ライティング解析 ---
+      let timeKey = null;
+      const timeRules = [
+        { key: 'aurora',  label: 'オーロラの夜', match: /オーロラ|極夜|北極|aurora/ },
+        { key: 'space',   label: '深宇宙',       match: /宇宙|銀河|星雲|惑星|ステーション|月面|space|galaxy/ },
+        { key: 'cyber',   label: 'ネオンナイト', match: /サイバー|ネオン|未来|電脳|cyber|neon/ },
+        { key: 'sunset',  label: '夕暮れ',       match: /夕暮|夕焼|夕方|黄昏|茜|日没|サンセット|sunset|dusk/ },
+        { key: 'night',   label: '星空・夜',     match: /夜|星空|満天|月夜|月|蛍|ほたる|ナイト|night|star|moon/ },
+        { key: 'foggy',   label: '幻想の霧',     match: /霧|幻想|神秘|幽玄|もののけ|mist|fog|mystic/ },
+        { key: 'morning', label: '朝・青空',     match: /朝|青空|昼|晴|南国|夏|morning|sunny|day/ }
+      ];
+      for (const r of timeRules) {
+        if (r.match.test(lower)) {
+          timeKey = r.key;
+          tags.push({ category: '空', label: r.label });
+          matchedAny = true;
+          break;
+        }
+      }
+
+      // --- B. 地形・地面解析 ---
+      let groundKey = null;
+      const groundRules = [
+        { key: 'volcano', label: '火山・溶岩',   match: /火山|溶岩|マグマ|地獄|灼熱|volcano|lava/ },
+        { key: 'space',   label: '浮遊回廊',     match: /宇宙|銀河|惑星|ステーション|space/ },
+        { key: 'snow',    label: '雪原・雪山',   match: /雪|氷|冬|スキー|ゲレンデ|北極|オーロラ|snow|ice/ },
+        { key: 'ocean',   label: '海・砂浜',     match: /海|砂浜|ビーチ|南国|沖縄|ハワイ|島|湖|水上|ocean|sea|beach/ },
+        { key: 'desert',  label: '砂漠',         match: /砂漠|ピラミッド|サハラ|砂丘|荒野|火星|desert|sand/ },
+        { key: 'city',    label: '都市・石畳',   match: /東京|渋谷|新宿|都市|街|ビル|サイバー|ネオン|city|tokyo|cyber/ },
+        { key: 'stone',   label: '石畳・境内',   match: /鳥居|神社|寺|遺跡|城|京都|洞窟|stone|shrine|ruin/ },
+        { key: 'grass',   label: '草原・森',     match: /草原|森|林|桜|竹|公園|緑|花|山|grass|forest/ }
+      ];
+      for (const r of groundRules) {
+        if (r.match.test(lower)) {
+          groundKey = r.key;
+          tags.push({ category: '地形', label: r.label });
+          matchedAny = true;
+          break;
+        }
+      }
+
+      // --- C. ランドマーク・オブジェクト解析（複数同時対応！） ---
+      const landmarks = [];
+      const landmarkRules = [
+        { key: 'castle',      label: 'お城',             match: /城|天守閣|城下町|castle/ },
+        { key: 'tokyo_tower', label: '東京タワー風鉄塔', match: /東京タワー|東京|鉄塔|タワー|tower|tokyo/ },
+        { key: 'torii',       label: '赤い鳥居',         match: /鳥居|神社|稲荷|京都|torii|shrine/ },
+        { key: 'sakura',      label: '桜の木',           match: /桜|さくら|サクラ|花見|sakura/ },
+        { key: 'bamboo',      label: '竹林',             match: /竹|竹林|bamboo/ },
+        { key: 'pyramid',     label: 'ピラミッド',       match: /ピラミッド|エジプト|スフィンクス|pyramid/ },
+        { key: 'ruins',       label: '古代遺跡',         match: /遺跡|神殿|パルテノン|廃墟|柱|ruin|temple/ },
+        { key: 'crystals',    label: '浮遊クリスタル',   match: /クリスタル|水晶|宝石|洞窟|魔法|結晶|crystal|magic/ },
+        { key: 'buildings',   label: '高層ビル群',       match: /ビル|都市|東京|渋谷|サイバー|ネオン|街|city|cyber/ },
+        { key: 'palm',        label: 'ヤシの木',         match: /ヤシ|椰子|南国|ビーチ|ハワイ|沖縄|島|palm|beach/ },
+        { key: 'pine',        label: '針葉樹',           match: /針葉樹|雪山|冬|雪|オーロラ|もみの木|pine|snow/ },
+        { key: 'planets',     label: '巨大惑星',         match: /惑星|宇宙|銀河|土星|月面|planet|space/ },
+        { key: 'mountains',   label: '山脈',             match: /山|雪山|富士|火山|アルプス|mountain|volcano/ },
+        { key: 'trees',       label: '森の木々',         match: /森|林|木|公園|自然|forest|tree/ }
+      ];
+      for (const r of landmarkRules) {
+        if (r.match.test(lower)) {
+          landmarks.push(r.key);
+          tags.push({ category: '造形', label: r.label });
+          matchedAny = true;
+        }
+      }
+
+      // --- D. パーティクル演出解析 ---
+      let particleKey = null;
+      const particleRules = [
+        { key: 'embers',    label: '火の粉',       match: /火の粉|火山|溶岩|炎|マグマ|fire|lava|volcano/ },
+        { key: 'petals',    label: '桜吹雪',       match: /桜|さくら|サクラ|花吹雪|花びら|sakura|petal/ },
+        { key: 'snow',      label: '雪',           match: /雪|吹雪|冬|オーロラ|snow/ },
+        { key: 'rain',      label: '雨',           match: /雨|梅雨|嵐|rain/ },
+        { key: 'fireflies', label: '蛍・光の粒子', match: /蛍|ほたる|霧|幻想|魔法|クリスタル|竹|鳥居|firefl|magic/ },
+        { key: 'stars',     label: '星屑',         match: /星|宇宙|銀河|ネオン|サイバー|star|space/ }
+      ];
+      for (const r of particleRules) {
+        if (r.match.test(lower)) {
+          particleKey = r.key;
+          tags.push({ category: '演出', label: r.label });
+          matchedAny = true;
+          break;
+        }
+      }
+
+      // --- E. 未指定要素の自然な補完 または 自由入力ハッシュ生成 ---
+      const isProceduralHash = !matchedAny;
+
+      if (isProceduralHash) {
+        // 辞書にない言葉（ファンタジー地名など）は文字列ハッシュから調和の取れた世界を合成
+        const timePool = ['sunset', 'night', 'aurora', 'foggy', 'morning', 'space'];
+        const groundPool = ['grass', 'snow', 'ocean', 'desert', 'stone', 'space', 'volcano'];
+        const lmPool = ['crystals', 'ruins', 'castle', 'sakura', 'bamboo', 'torii', 'pyramid', 'planets', 'trees', 'pine'];
+        const partPool = ['fireflies', 'stars', 'petals', 'snow', 'embers'];
+
+        timeKey = timePool[Math.floor(rng() * timePool.length)];
+        groundKey = groundPool[Math.floor(rng() * groundPool.length)];
+        const lm1 = lmPool[Math.floor(rng() * lmPool.length)];
+        const lm2 = lmPool[Math.floor(rng() * lmPool.length)];
+        landmarks.push(lm1);
+        if (lm2 !== lm1 && rng() > 0.35) landmarks.push(lm2);
+        particleKey = partPool[Math.floor(rng() * partPool.length)];
+
+        const labelMap = {
+          aurora: 'オーロラ', space: '深宇宙', sunset: '夕暮れ', night: '星空', foggy: '幻想の霧', morning: '青空',
+          grass: '草原', snow: '雪原', ocean: '海', desert: '砂漠', stone: '石畳', volcano: '火山',
+          crystals: 'クリスタル', ruins: '古代遺跡', castle: 'お城', sakura: '桜', bamboo: '竹林',
+          torii: '鳥居', pyramid: 'ピラミッド', planets: '惑星', trees: '森', pine: '針葉樹',
+          fireflies: '光の粒子', stars: '星屑', petals: '花吹雪', embers: '火の粉'
+        };
+        tags.push({ category: 'シード', label: `#${(seed % 10000).toString().padStart(4, '0')}` });
+        tags.push({ category: '空', label: labelMap[timeKey] });
+        tags.push({ category: '地形', label: labelMap[groundKey] });
+        landmarks.forEach((l) => tags.push({ category: '造形', label: labelMap[l] }));
+      } else {
+        // 部分マッチ時は自然な組み合わせで不足分を補完
+        if (!timeKey) {
+          if (groundKey === 'volcano') timeKey = 'sunset';
+          else if (groundKey === 'city') timeKey = 'cyber';
+          else if (groundKey === 'space') timeKey = 'space';
+          else if (landmarks.includes('crystals') || landmarks.includes('torii')) timeKey = 'night';
+          else timeKey = 'morning';
+        }
+        if (!groundKey) {
+          if (timeKey === 'space') groundKey = 'space';
+          else if (timeKey === 'cyber') groundKey = 'city';
+          else if (timeKey === 'aurora') groundKey = 'snow';
+          else if (landmarks.includes('pyramid')) groundKey = 'desert';
+          else if (landmarks.includes('palm')) groundKey = 'ocean';
+          else groundKey = 'grass';
+        }
+        if (landmarks.length === 0) {
+          if (groundKey === 'ocean') landmarks.push('palm');
+          else if (groundKey === 'snow') landmarks.push('pine', 'mountains');
+          else if (groundKey === 'desert') landmarks.push('pyramid');
+          else if (groundKey === 'city') landmarks.push('buildings');
+          else if (groundKey === 'space') landmarks.push('planets');
+          else if (groundKey === 'volcano') landmarks.push('mountains', 'ruins');
+          else landmarks.push('trees');
+        }
+        if (!particleKey) {
+          if (groundKey === 'snow') particleKey = 'snow';
+          else if (groundKey === 'volcano') particleKey = 'embers';
+          else if (timeKey === 'space' || timeKey === 'night') particleKey = 'stars';
+          else if (timeKey === 'foggy') particleKey = 'fireflies';
+          else particleKey = 'none';
+        }
+      }
+
+      // --- F. パレット＆ライティング決定 ---
+      const skyPresets = {
+        morning: { top: '#0284c7', mid: '#38bdf8', bottom: '#e0f2fe', fog: '#dbeafe', fogD: 0.0085, light: '#fffbeb', int: 1.25, celestial: 'sun' },
+        sunset:  { top: '#31105f', mid: '#c2410c', bottom: '#fdba74', fog: '#f97316', fogD: 0.012,  light: '#ffd7aa', int: 1.15, celestial: 'sun' },
+        night:   { top: '#020617', mid: '#0f172a', bottom: '#1e293b', fog: '#0f172a', fogD: 0.013,  light: '#cbd5e1', int: 0.85, celestial: 'moon' },
+        aurora:  { top: '#020617', mid: '#0c2338', bottom: '#134e4a', fog: '#0f293a', fogD: 0.013,  light: '#a7f3d0', int: 0.95, celestial: 'aurora' },
+        cyber:   { top: '#050414', mid: '#1e1042', bottom: '#3b0764', fog: '#190d36', fogD: 0.018,  light: '#38bdf8', int: 0.95, celestial: 'moon' },
+        foggy:   { top: '#334155', mid: '#64748b', bottom: '#cbd5e1', fog: '#94a3b8', fogD: 0.026,  light: '#e2e8f0', int: 0.95, celestial: 'none' },
+        space:   { top: '#010108', mid: '#070b1e', bottom: '#111838', fog: '#040614', fogD: 0.004,  light: '#e0f2fe', int: 1.1,  celestial: 'stars' }
+      };
+
+      const skyCfg = { ...skyPresets[timeKey] };
+
+      // 火山地面の場合は空と霧に赤みを帯びさせる
+      if (groundKey === 'volcano') {
+        skyCfg.top = '#1c0a0a';
+        skyCfg.mid = '#7c2d12';
+        skyCfg.bottom = '#ea580c';
+        skyCfg.fog = '#7c2d12';
+        skyCfg.fogD = 0.017;
+        skyCfg.light = '#fdba74';
+      }
+
+      // 自由入力ハッシュ時は色相を少し個性化
+      const customAccent = isProceduralHash
+        ? hslToHex(Math.floor(rng() * 360), 0.78, 0.65)
+        : (timeKey === 'cyber' ? '#22d3ee' : groundKey === 'volcano' ? '#f97316' : '#38bdf8');
+
+      // 説明文の自動生成
+      const descParts = [];
+      if (isProceduralHash) {
+        descParts.push(`「${text}」の響きから固有シードを算出し、この場所だけの3D空間を合成しました。`);
+      } else {
+        const tDesc = {
+          morning: '爽やかな陽光が差し込む空の下、',
+          sunset: '茜色に染まる黄昏の空の下、',
+          night: '静かな月と無数の星が瞬く夜空の下、',
+          aurora: '神秘的なオーロラが揺らめく夜空の下、',
+          cyber: '鮮やかなネオンが闇夜に映える空間に、',
+          foggy: '幻想的な白い霧が立ち込める静寂の中、',
+          space: '果てしない星々が広がる深宇宙に、'
+        }[timeKey];
+        descParts.push(tDesc);
+        descParts.push('ドアの向こうへ歩み出て自由に探索できます。');
+      }
+
+      return {
+        title: text,
+        description: descParts.join(''),
+        isProceduralHash,
+        seed,
+        tags: tags.slice(0, 5),
+        timeKey,
+        groundKey,
+        landmarks: landmarks.slice(0, 3), // 最大3種類まで美しく共存
+        particleKey,
+        skyTopColor: skyCfg.top,
+        skyMidColor: skyCfg.mid,
+        skyBottomColor: skyCfg.bottom,
+        fogColor: skyCfg.fog,
+        fogDensity: skyCfg.fogD,
+        lightColor: skyCfg.light,
+        lightIntensity: skyCfg.int,
+        celestialType: skyCfg.celestial,
+        accentColor: customAccent
+      };
+    }
+
+    // =========================================================================
+    // 6. Three.js 初期化＆双方向ポータル構造の構築
+    // =========================================================================
+    function initThree() {
+      const container = document.getElementById('canvas-container');
+      clock = new THREE.Clock();
+
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        stencil: true,
+        powerPreference: 'high-performance'
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.autoClear = false;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.08, 360);
+      camera.position.set(0, EYE_HEIGHT, 5.2);
+      camera.rotation.order = 'YXZ';
+
+      homeScene = new THREE.Scene();
+      homeScene.fog = new THREE.FogExp2(0xeaf0f6, 0.017);
+
+      portalScene = new THREE.Scene();
+      maskScene = new THREE.Scene();
+
+      buildHomeSpace();
+      buildDoor();
+      buildPortalMasks();
+
+      homeScene.add(doorGroup);
+
+      portalDynamicGroup = new THREE.Group();
+      portalScene.add(portalDynamicGroup);
+
+      // 初期の裏世界として「夕暮れの桜とお城」を待機させておく
+      const initialWorld = analyzePromptOffline('夕暮れの桜とお城');
+      buildPortalWorld(initialWorld);
+      state.currentWorldData = initialWorld;
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    // 初期空間：清潔感のある白いギャラリー空間
+    function buildHomeSpace() {
+      homeScene.add(createSkyDome('#dde5ef', '#edf2f7', '#ffffff'));
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0xcbd5e1, 0.95);
+      homeScene.add(hemi);
+
+      const dir = new THREE.DirectionalLight(0xfffaf0, 0.85);
+      dir.position.set(6, 12, 8);
+      dir.castShadow = true;
+      dir.shadow.mapSize.width = 1024;
+      dir.shadow.mapSize.height = 1024;
+      const d = 8;
+      dir.shadow.camera.left = -d;
+      dir.shadow.camera.right = d;
+      dir.shadow.camera.top = d;
+      dir.shadow.camera.bottom = -d;
+      homeScene.add(dir);
+
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(180, 180),
+        new THREE.MeshStandardMaterial({
+          map: createGalleryGridTexture(),
+          roughness: 0.75,
+          metalness: 0.04
+        })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      homeScene.add(floor);
+
+      // ドア下の静かな円形ライン
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(2.3, 2.38, 64),
+        new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.008;
+      homeScene.add(ring);
+    }
+
+    // 中央に1つだけ立つ木製ドア＆モダン白枠
+    function buildDoor() {
+      doorGroup = new THREE.Group();
+      const woodTex = createWoodTexture();
+
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.32, metalness: 0.08 });
+      const doorMat = new THREE.MeshStandardMaterial({ map: woodTex, color: 0xdca57c, roughness: 0.52, metalness: 0.05 });
+      const panelMat = new THREE.MeshStandardMaterial({ map: woodTex, color: 0xc2875c, roughness: 0.58 });
+      const brassMat = new THREE.MeshStandardMaterial({ color: 0xf5c869, roughness: 0.22, metalness: 0.88 });
+
+      const fThick = 0.16;
+      const fDepth = 0.24;
+
+      const leftPost = new THREE.Mesh(new THREE.BoxGeometry(fThick, DOOR_HEIGHT + fThick, fDepth), frameMat);
+      leftPost.position.set(-DOOR_WIDTH / 2 - fThick / 2, (DOOR_HEIGHT + fThick) / 2, 0.04);
+      leftPost.castShadow = leftPost.receiveShadow = true;
+
+      const rightPost = new THREE.Mesh(new THREE.BoxGeometry(fThick, DOOR_HEIGHT + fThick, fDepth), frameMat);
+      rightPost.position.set(DOOR_WIDTH / 2 + fThick / 2, (DOOR_HEIGHT + fThick) / 2, 0.04);
+      rightPost.castShadow = rightPost.receiveShadow = true;
+
+      const topBar = new THREE.Mesh(new THREE.BoxGeometry(DOOR_WIDTH + fThick * 2, fThick, fDepth), frameMat);
+      topBar.position.set(0, DOOR_HEIGHT + fThick / 2, 0.04);
+      topBar.castShadow = topBar.receiveShadow = true;
+
+      const threshold = new THREE.Mesh(new THREE.BoxGeometry(DOOR_WIDTH + fThick * 2 + 0.16, 0.04, fDepth + 0.14), frameMat);
+      threshold.position.set(0, 0.02, 0.04);
+      threshold.receiveShadow = true;
+
+      doorGroup.add(leftPost, rightPost, topBar, threshold);
+
+      // 生成時に一瞬光るポータルリム
+      const glowEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(DOOR_WIDTH + 0.04, DOOR_HEIGHT + 0.04, 0.04));
+      doorGlowMesh = new THREE.LineSegments(
+        glowEdges,
+        new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0 })
+      );
+      doorGlowMesh.position.set(0, DOOR_HEIGHT / 2, 0.04);
+      doorGroup.add(doorGlowMesh);
+
+      // 扉ヒンジピボット
+      doorPivot = new THREE.Group();
+      doorPivot.position.set(-DOOR_WIDTH / 2, 0, 0.04);
+      doorGroup.add(doorPivot);
+
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(DOOR_WIDTH, DOOR_HEIGHT, 0.08), doorMat);
+      leaf.position.set(DOOR_WIDTH / 2, DOOR_HEIGHT / 2, 0);
+      leaf.castShadow = leaf.receiveShadow = true;
+      doorPivot.add(leaf);
+
+      // 表裏の装飾パネルと真鍮ドアノブ
+      [-0.044, 0.044].forEach((zOff) => {
+        const up = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.25, 0.014), panelMat);
+        up.position.set(DOOR_WIDTH / 2, 2.3, zOff);
+        const low = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.1, 0.014), panelMat);
+        low.position.set(DOOR_WIDTH / 2, 0.88, zOff);
+        doorPivot.add(up, low);
+      });
+
+      [-0.095, 0.095].forEach((zOff) => {
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.08, 12), brassMat);
+        stem.rotation.x = Math.PI / 2;
+        stem.position.set(DOOR_WIDTH - 0.22, 1.5, zOff * 0.58);
+        const knob = new THREE.Mesh(new THREE.SphereGeometry(0.065, 16, 16), brassMat);
+        knob.position.set(DOOR_WIDTH - 0.22, 1.5, zOff);
+        doorPivot.add(stem, knob);
+      });
+    }
+
+    // 双方向ポータル用ステンシルマスク
+    function buildPortalMasks() {
+      const geo = new THREE.PlaneGeometry(DOOR_WIDTH, DOOR_HEIGHT);
+      const createMaskMat = () => new THREE.MeshBasicMaterial({
+        colorWrite: false,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.FrontSide, // 裏側からは描画されない
+        stencilWrite: true,
+        stencilRef: 1,
+        stencilFunc: THREE.AlwaysStencilFunc,
+        stencilFail: THREE.KeepStencilOp,
+        stencilZFail: THREE.KeepStencilOp,
+        stencilZPass: THREE.ReplaceStencilOp
+      });
+
+      // 待機空間(+Z)から見て、閉じた扉よりわずかに奥(z=-0.01)
+      portalMaskFront = new THREE.Mesh(geo, createMaskMat());
+      portalMaskFront.position.set(0, DOOR_HEIGHT / 2, -0.01);
+      maskScene.add(portalMaskFront);
+
+      // 異空間(-Z)から見て、閉じた扉よりわずかに奥(z=+0.09, -Z向き)
+      portalMaskBack = new THREE.Mesh(geo, createMaskMat());
+      portalMaskBack.position.set(0, DOOR_HEIGHT / 2, 0.09);
+      portalMaskBack.rotation.y = Math.PI;
+      portalMaskBack.visible = false;
+      maskScene.add(portalMaskBack);
+    }
+
+    function applyStencilTestToScene(scene, enableTest) {
+      scene.traverse((obj) => {
+        if (!obj.material) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((mat) => {
+          if (enableTest) {
+            mat.stencilWrite = true;
+            mat.stencilRef = 1;
+            mat.stencilFunc = THREE.EqualStencilFunc;
+            mat.stencilFail = THREE.KeepStencilOp;
+            mat.stencilZFail = THREE.KeepStencilOp;
+            mat.stencilZPass = THREE.KeepStencilOp;
+          } else {
+            mat.stencilWrite = false;
+            mat.stencilFunc = THREE.AlwaysStencilFunc;
+          }
+        });
+      });
+    }
+
+    // =========================================================================
+    // 7. プロシージャル3D世界＆多彩なランドマーク構築
+    // =========================================================================
+    function clearPortalWorld() {
+      animatedWaterMesh = null;
+      animatedAuroraMesh = null;
+      animatedFloaters = [];
+      animatedPlanets = [];
+      particleSystem = null;
+      particleMeta = null;
+
+      while (portalDynamicGroup.children.length > 0) {
+        const child = portalDynamicGroup.children[0];
+        portalDynamicGroup.remove(child);
+        child.traverse((obj) => {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            mats.forEach((m) => m.dispose());
+          }
+        });
+      }
+    }
+
+    function buildPortalWorld(world) {
+      clearPortalWorld();
+      const rng = createSeededRng(world.seed ^ 0x9e3779b9);
+
+      // 霧
+      portalScene.fog = new THREE.FogExp2(new THREE.Color(world.fogColor), world.fogDensity);
+
+      // 空ドーム
+      portalDynamicGroup.add(createSkyDome(world.skyTopColor, world.skyMidColor, world.skyBottomColor));
+
+      // ライティング
+      const lightCol = new THREE.Color(world.lightColor);
+      portalDynamicGroup.add(new THREE.AmbientLight(lightCol, 0.45 * world.lightIntensity));
+      portalDynamicGroup.add(new THREE.HemisphereLight(new THREE.Color(world.skyMidColor), new THREE.Color('#334155'), 0.55 * world.lightIntensity));
+      const sun = new THREE.DirectionalLight(lightCol, 0.95 * world.lightIntensity);
+      sun.position.set(16, 28, -22);
+      portalDynamicGroup.add(sun);
+
+      // 天体・オーロラ
+      buildCelestials(world, rng);
+
+      // 地面・水面
+      buildGround(world);
+
+      // 複数ランドマークの構築
+      world.landmarks.forEach((lm, idx) => {
+        buildLandmark(lm, world, rng, idx);
+      });
+
+      // パーティクル
+      buildParticles(world, rng);
+
+      // ステンシル状態同期
+      applyStencilTestToScene(portalScene, !state.inWorld);
+    }
+
+    function buildCelestials(world, rng) {
+      const cType = world.celestialType;
+
+      if (cType === 'sun') {
+        const isSunset = world.timeKey === 'sunset' || world.groundKey === 'volcano';
+        const sunPos = isSunset ? new THREE.Vector3(12, 13, -82) : new THREE.Vector3(20, 32, -78);
+        const sunMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(isSunset ? 7.5 : 5.2, 24, 24),
+          new THREE.MeshBasicMaterial({ color: isSunset ? 0xfb923c : 0xfff7cc, fog: false })
+        );
+        sunMesh.position.copy(sunPos);
+        portalDynamicGroup.add(sunMesh);
+
+        const halo = new THREE.Mesh(
+          new THREE.RingGeometry(isSunset ? 8.0 : 5.8, isSunset ? 13.5 : 9.5, 32),
+          new THREE.MeshBasicMaterial({ color: isSunset ? 0xfdba74 : 0xfef08a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, fog: false })
+        );
+        halo.position.copy(sunPos);
+        halo.lookAt(0, EYE_HEIGHT, 0);
+        portalDynamicGroup.add(halo);
+      }
+
+      if (cType === 'moon' || cType === 'stars' || cType === 'aurora') {
+        const count = cType === 'stars' ? 1500 : 800;
+        const pos = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          const theta = rng() * Math.PI * 2;
+          const phi = Math.acos(rng() * 0.88 + 0.08);
+          const r = 135 + rng() * 25;
+          pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+          pos[i * 3 + 1] = r * Math.cos(phi);
+          pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        portalDynamicGroup.add(new THREE.Points(geo, new THREE.PointsMaterial({
+          color: 0xffffff,
+          size: cType === 'stars' ? 1.15 : 0.9,
+          transparent: true,
+          opacity: 0.92,
+          fog: false
+        })));
+      }
+
+      if (cType === 'moon') {
+        const moon = new THREE.Mesh(
+          new THREE.SphereGeometry(6.2, 24, 24),
+          new THREE.MeshBasicMaterial({ color: 0xfef9c3, fog: false })
+        );
+        moon.position.set(-16, 28, -82);
+        portalDynamicGroup.add(moon);
+      }
+
+      if (cType === 'aurora') {
+        const geo = new THREE.PlaneGeometry(140, 28, 48, 8);
+        const mat = new THREE.ShaderMaterial({
+          uniforms: {
+            uTime: { value: 0 },
+            uCol1: { value: new THREE.Color('#22d3ee') },
+            uCol2: { value: new THREE.Color('#4ade80') },
+            uCol3: { value: new THREE.Color('#a855f7') }
+          },
+          vertexShader: `
+            uniform float uTime;
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              vec3 p = position;
+              p.z += sin(p.x * 0.08 + uTime * 0.8) * 6.5;
+              p.y += cos(p.x * 0.05 + uTime * 0.5) * 2.5;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform float uTime;
+            uniform vec3 uCol1;
+            uniform vec3 uCol2;
+            uniform vec3 uCol3;
+            varying vec2 vUv;
+            void main() {
+              float w = sin(vUv.x * 12.0 + uTime * 1.1) * 0.5 + 0.5;
+              vec3 col = mix(uCol2, uCol1, w);
+              col = mix(col, uCol3, smoothstep(0.55, 1.0, vUv.y));
+              float a = sin(vUv.y * 3.14159) * smoothstep(0.0, 0.22, vUv.x) * smoothstep(1.0, 0.78, vUv.x);
+              a *= (0.38 + 0.36 * sin(vUv.x * 18.0 - uTime * 1.5));
+              gl_FragColor = vec4(col, a * 0.88);
+            }
+          `,
+          transparent: true,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          fog: false
+        });
+        animatedAuroraMesh = new THREE.Mesh(geo, mat);
+        animatedAuroraMesh.position.set(0, 32, -62);
+        animatedAuroraMesh.rotation.x = 0.2;
+        portalDynamicGroup.add(animatedAuroraMesh);
+      }
+    }
+
+    function buildGround(world) {
+      const g = world.groundKey;
+
+      if (g === 'space') {
+        const walkway = new THREE.Mesh(
+          new THREE.BoxGeometry(3.6, 0.14, 56),
+          new THREE.MeshStandardMaterial({
+            color: 0x1e293b,
+            emissive: new THREE.Color(world.accentColor),
+            emissiveIntensity: 0.28,
+            roughness: 0.15,
+            metalness: 0.75,
+            transparent: true,
+            opacity: 0.85
+          })
+        );
+        walkway.position.set(0, -0.07, -24);
+        portalDynamicGroup.add(walkway);
+
+        [-1.75, 1.75].forEach((x) => {
+          const rail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.08, 56),
+            new THREE.MeshBasicMaterial({ color: world.accentColor })
+          );
+          rail.position.set(x, 0.02, -24);
+          portalDynamicGroup.add(rail);
+        });
+        return;
+      }
+
+      if (g === 'ocean') {
+        // 波打つ海面
+        const waterGeo = new THREE.PlaneGeometry(190, 190, 48, 48);
+        waterGeo.rotateX(-Math.PI / 2);
+        const waterColor = world.timeKey === 'night' ? 0x0c4a6e : (world.timeKey === 'sunset' ? 0x0e7490 : 0x06b6d4);
+        animatedWaterMesh = new THREE.Mesh(
+          waterGeo,
+          new THREE.MeshStandardMaterial({ color: waterColor, roughness: 0.18, metalness: 0.4, flatShading: true })
+        );
+        animatedWaterMesh.position.y = -0.18;
+        portalDynamicGroup.add(animatedWaterMesh);
+
+        // ドア周りの砂浜の小島＋海へ伸びる木製桟橋
+        const sandIsland = new THREE.Mesh(
+          new THREE.CylinderGeometry(7.5, 9.5, 0.45, 24),
+          new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.92 })
+        );
+        sandIsland.position.set(0, -0.22, -2.5);
+        portalDynamicGroup.add(sandIsland);
+
+        const pier = new THREE.Mesh(
+          new THREE.BoxGeometry(2.5, 0.16, 30),
+          new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.82 })
+        );
+        pier.position.set(0, 0.02, -18);
+        portalDynamicGroup.add(pier);
+        return;
+      }
+
+      if (g === 'city') {
+        const floor = new THREE.Mesh(
+          new THREE.PlaneGeometry(190, 190),
+          new THREE.MeshStandardMaterial({
+            map: createCityRoadTexture(world.accentColor),
+            roughness: 0.25,
+            metalness: 0.6
+          })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        portalDynamicGroup.add(floor);
+        return;
+      }
+
+      // 起伏のある地形（grass / snow / desert / stone / volcano）
+      const colorMap = {
+        grass: '#4d7c0f',
+        snow: '#e2e8f0',
+        desert: '#e6b873',
+        stone: '#475569',
+        volcano: '#292524'
+      };
+      const geo = new THREE.PlaneGeometry(190, 190, 56, 56);
+      geo.rotateX(-Math.PI / 2);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getZ(i);
+        const flatPath = Math.min(1, Math.max(0, (Math.abs(x) - 2.6) / 5.5)) *
+                         Math.min(1, Math.max(0, (Math.hypot(x, z) - 4.0) / 5.0));
+        const amp = g === 'desert' ? 2.2 : (g === 'volcano' ? 2.5 : 1.5);
+        const hill = (Math.sin(x * 0.075) * Math.cos(z * 0.075) * amp + Math.sin(x * 0.2 + z * 0.14) * 0.45) * flatPath;
+        pos.setY(i, hill);
+      }
+      geo.computeVertexNormals();
+
+      const terrain = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({
+          color: colorMap[g] || '#4d7c0f',
+          roughness: g === 'snow' ? 0.55 : 0.9,
+          metalness: 0.04,
+          flatShading: true
+        })
+      );
+      portalDynamicGroup.add(terrain);
+
+      // 火山なら光る溶岩の川
+      if (g === 'volcano') {
+        const lava = new THREE.Mesh(
+          new THREE.PlaneGeometry(190, 190),
+          new THREE.MeshBasicMaterial({ color: 0xea580c })
+        );
+        lava.rotation.x = -Math.PI / 2;
+        lava.position.y = -0.45;
+        portalDynamicGroup.add(lava);
+      }
+
+      // 参道・小道
+      if (g === 'grass' || g === 'stone' || g === 'volcano') {
+        const pathCol = g === 'volcano' ? 0x44403c : (g === 'stone' ? 0x64748b : 0xd6cfc2);
+        const path = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.8, 56),
+          new THREE.MeshStandardMaterial({ color: pathCol, roughness: 0.92 })
+        );
+        path.rotation.x = -Math.PI / 2;
+        path.position.set(0, 0.025, -26);
+        portalDynamicGroup.add(path);
+      }
+    }
+
+    // --- 個別ランドマーク生成 ---
+    function buildLandmark(type, world, rng, slotIndex) {
+      if (type === 'castle') {
+        // 天守閣と石垣のある日本のお城（正面奥に堂々と配置）
+        const castle = new THREE.Group();
+        const stoneMat = new THREE.MeshStandardMaterial({ map: createStoneWallTexture(), roughness: 0.88 });
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.55 });
+        const roofMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.45, flatShading: true });
+        const goldMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.8, roughness: 0.25 });
+
+        // 石垣台座
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(6.2, 8.0, 4.2, 4), stoneMat);
+        base.rotation.y = Math.PI / 4;
+        base.position.y = 2.1;
+        castle.add(base);
+
+        // 3層の天守閣
+        const tiers = [
+          { w: 7.4, h: 3.0, y: 5.7, roofR: 6.8 },
+          { w: 5.4, h: 2.6, y: 8.5, roofR: 5.2 },
+          { w: 3.6, h: 2.3, y: 11.0, roofR: 3.8 }
+        ];
+        tiers.forEach((t) => {
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(t.w, t.h, t.w), wallMat);
+          wall.position.y = t.y;
+          castle.add(wall);
+
+          const roof = new THREE.Mesh(new THREE.ConeGeometry(t.roofR, 1.5, 4), roofMat);
+          roof.rotation.y = Math.PI / 4;
+          roof.position.y = t.y + t.h / 2 + 0.55;
+          castle.add(roof);
+        });
+
+        // 金のしゃちほこ
+        [-0.7, 0.7].forEach((sx) => {
+          const shachi = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.9, 6), goldMat);
+          shachi.position.set(sx, 13.4, 0);
+          shachi.rotation.z = sx > 0 ? -0.25 : 0.25;
+          castle.add(shachi);
+        });
+
+        castle.position.set(slotIndex === 0 ? 0 : 7.5, 0, -26);
+        portalDynamicGroup.add(castle);
+        return;
+      }
+
+      if (type === 'tokyo_tower') {
+        // 東京タワー風の赤白鉄塔
+        const tower = new THREE.Group();
+        const redMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0x991b1b, emissiveIntensity: 0.35, roughness: 0.4 });
+        const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, emissive: 0x64748b, emissiveIntensity: 0.2, roughness: 0.4 });
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+
+        const segments = [
+          { rTop: 2.4, rBot: 4.5, h: 6.0, y: 3.0, mat: redMat },
+          { rTop: 1.5, rBot: 2.4, h: 5.0, y: 8.5, mat: whiteMat },
+          { rTop: 1.0, rBot: 1.5, h: 4.8, y: 13.4, mat: redMat },
+          { rTop: 0.5, rBot: 1.0, h: 4.6, y: 18.1, mat: whiteMat },
+          { rTop: 0.12, rBot: 0.5, h: 4.8, y: 22.8, mat: redMat }
+        ];
+        segments.forEach((s) => {
+          const seg = new THREE.Mesh(new THREE.CylinderGeometry(s.rTop, s.rBot, s.h, 4, 1, false), s.mat);
+          seg.rotation.y = Math.PI / 4;
+          seg.position.y = s.y;
+          tower.add(seg);
+        });
+
+        // メインデッキ＆トップデッキ
+        const deck1 = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.3, 4.2), whiteMat);
+        deck1.position.y = 11.2;
+        const deck1Light = new THREE.Mesh(new THREE.BoxGeometry(4.35, 0.35, 4.35), glowMat);
+        deck1Light.position.y = 11.2;
+
+        const deck2 = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.9, 2.1), whiteMat);
+        deck2.position.y = 18.8;
+        const deck2Light = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.28, 2.2), glowMat);
+        deck2Light.position.y = 18.8;
+
+        const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.12, 4.0, 8), whiteMat);
+        antenna.position.y = 27.0;
+
+        tower.add(deck1, deck1Light, deck2, deck2Light, antenna);
+        tower.position.set(0, 0, -28);
+        portalDynamicGroup.add(tower);
+        return;
+      }
+
+      if (type === 'torii') {
+        const redMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.45 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.7 });
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+
+        for (let i = 0; i < 16; i++) {
+          const gate = new THREE.Group();
+          gate.position.set(0, 0, -4.0 - i * 2.6);
+
+          const pGeo = new THREE.CylinderGeometry(0.12, 0.15, 3.6, 10);
+          const lp = new THREE.Mesh(pGeo, redMat); lp.position.set(-1.5, 1.8, 0);
+          const rp = new THREE.Mesh(pGeo, redMat); rp.position.set(1.5, 1.8, 0);
+          const beam = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.22, 0.28), redMat); beam.position.set(0, 3.62, 0);
+          const cap = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.14, 0.34), darkMat); cap.position.set(0, 3.78, 0);
+          const sub = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.15, 0.18), redMat); sub.position.set(0, 3.05, 0);
+          gate.add(lp, rp, beam, cap, sub);
+
+          if (i % 3 === 0) {
+            [-2.5, 2.5].forEach((lx) => {
+              const b = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 1.1, 6), darkMat); b.position.set(lx, 0.55, 0);
+              const l = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.32, 0.26), glowMat); l.position.set(lx, 1.25, 0);
+              const r = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.26, 6), darkMat); r.position.set(lx, 1.54, 0);
+              gate.add(b, l, r);
+            });
+          }
+          portalDynamicGroup.add(gate);
+        }
+        return;
+      }
+
+      if (type === 'pyramid') {
+        const sandMat = new THREE.MeshStandardMaterial({ color: 0xd9a05b, roughness: 0.85, flatShading: true });
+        const configs = [
+          { x: -12, z: -32, r: 14, h: 15 },
+          { x: 14, z: -42, r: 18, h: 19 },
+          { x: -24, z: -48, r: 10, h: 11 }
+        ];
+        configs.forEach((c) => {
+          const pyr = new THREE.Mesh(new THREE.ConeGeometry(c.r, c.h, 4), sandMat);
+          pyr.rotation.y = Math.PI / 4;
+          pyr.position.set(c.x, c.h / 2 - 0.3, c.z);
+          portalDynamicGroup.add(pyr);
+        });
+        return;
+      }
+
+      if (type === 'ruins') {
+        const stoneMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.85, flatShading: true });
+        for (let i = 0; i < 14; i++) {
+          const side = i % 2 === 0 ? -1 : 1;
+          const row = Math.floor(i / 2);
+          const x = side * (4.2 + (row % 2) * 1.4);
+          const z = -5.0 - row * 4.5;
+          const broken = rng() > 0.65;
+          const h = broken ? (2.2 + rng() * 2.5) : 5.6;
+
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.44, h, 10), stoneMat);
+          col.position.set(x, h / 2, z);
+          portalDynamicGroup.add(col);
+
+          const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.35, 1.1), stoneMat);
+          base.position.set(x, 0.175, z);
+          portalDynamicGroup.add(base);
+
+          if (!broken && row % 2 === 0) {
+            const lintel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.45, 5.2), stoneMat);
+            lintel.position.set(x, h + 0.22, z - 2.2);
+            portalDynamicGroup.add(lintel);
+          }
+        }
+        return;
+      }
+
+      if (type === 'planets') {
+        const palette = [0x60a5fa, 0xf472b6, 0xfbbf24, 0xa78bfa, 0x34d399];
+        for (let i = 0; i < 14; i++) {
+          const r = i === 0 ? 7.8 : (1.3 + rng() * 3.8);
+          const g = new THREE.Group();
+          const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(r, 24, 24),
+            new THREE.MeshStandardMaterial({ color: palette[i % palette.length], roughness: 0.6, metalness: 0.15 })
+          );
+          g.add(sphere);
+          if (i % 2 === 0) {
+            const ring = new THREE.Mesh(
+              new THREE.RingGeometry(r * 1.35, r * 1.85, 36),
+              new THREE.MeshBasicMaterial({ color: world.accentColor, side: THREE.DoubleSide, transparent: true, opacity: 0.55 })
+            );
+            ring.rotation.x = Math.PI * 0.42;
+            ring.rotation.y = (rng() - 0.5) * 0.5;
+            g.add(ring);
+          }
+          if (i === 0) {
+            g.position.set(9, 11, -36);
+          } else {
+            const ang = (i / 13) * Math.PI * 2;
+            const dist = 18 + rng() * 38;
+            g.position.set(Math.cos(ang) * dist, (rng() - 0.3) * 26, -12 - Math.abs(Math.sin(ang) * dist));
+          }
+          g.userData.rotSpeed = 0.08 + rng() * 0.22;
+          animatedPlanets.push(g);
+          portalDynamicGroup.add(g);
+        }
+        return;
+      }
+
+      if (type === 'crystals') {
+        const mainCol = new THREE.Color(world.accentColor);
+        const cMat = new THREE.MeshStandardMaterial({
+          color: mainCol,
+          emissive: mainCol,
+          emissiveIntensity: 0.5,
+          roughness: 0.15,
+          metalness: 0.35,
+          transparent: true,
+          opacity: 0.88,
+          flatShading: true
+        });
+        for (let i = 0; i < 24; i++) {
+          const ang = rng() * Math.PI * 2;
+          const dist = 5.5 + rng() * 30;
+          let x = Math.cos(ang) * dist;
+          let z = Math.sin(ang) * dist - 12;
+          if (Math.abs(x) < 2.8 && z > -22 && z < 4) x += x >= 0 ? 3.5 : -3.5;
+
+          const floating = i % 3 === 0;
+          const h = 1.6 + rng() * 3.0;
+          const r = 0.35 + rng() * 0.45;
+          const shard = new THREE.Mesh(new THREE.OctahedronGeometry(r, 0), cMat);
+          shard.scale.set(1, h / (r * 2), 1);
+          const baseY = floating ? (2.2 + rng() * 4.5) : (h * 0.42);
+          shard.position.set(x, baseY, z);
+          shard.rotation.z = (rng() - 0.5) * 0.35;
+
+          if (floating) {
+            shard.userData = { baseY, phase: rng() * Math.PI * 2, speed: 0.9 + rng() * 0.9 };
+            animatedFloaters.push(shard);
+          }
+          portalDynamicGroup.add(shard);
+        }
+        return;
+      }
+
+      if (type === 'bamboo') {
+        const stemMat = new THREE.MeshStandardMaterial({ color: 0x3f6212, roughness: 0.6 });
+        const nodeMat = new THREE.MeshStandardMaterial({ color: 0x84cc16, roughness: 0.7 });
+        const leafMat = new THREE.MeshStandardMaterial({ color: 0x4d7c0f, roughness: 0.8, side: THREE.DoubleSide });
+
+        for (let i = 0; i < 65; i++) {
+          const side = i % 2 === 0 ? -1 : 1;
+          const x = side * (3.2 + rng() * 18);
+          const z = -2.5 - rng() * 42;
+          const h = 7.5 + rng() * 6.5;
+
+          const g = new THREE.Group();
+          const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, h, 7), stemMat);
+          stalk.position.y = h / 2;
+          g.add(stalk);
+
+          for (let ny = 1.6; ny < h - 1; ny += 1.8) {
+            const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.135, 0.08, 7), nodeMat);
+            ring.position.y = ny;
+            g.add(ring);
+          }
+          const crown = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.8, 5), leafMat);
+          crown.position.y = h;
+          g.add(crown);
+
+          g.position.set(x, 0, z);
+          g.rotation.z = (rng() - 0.5) * 0.08;
+          portalDynamicGroup.add(g);
+        }
+        return;
+      }
+
+      if (type === 'buildings') {
+        const bTex = createBuildingWindowTexture('#141a2e', world.accentColor);
+        const bMat = new THREE.MeshStandardMaterial({
+          map: bTex,
+          emissive: new THREE.Color(world.accentColor),
+          emissiveMap: bTex,
+          emissiveIntensity: 0.6,
+          roughness: 0.3,
+          metalness: 0.55
+        });
+        const neonMat = new THREE.MeshBasicMaterial({ color: world.accentColor });
+
+        for (let i = 0; i < 34; i++) {
+          const side = i % 2 === 0 ? -1 : 1;
+          const row = Math.floor(i / 2);
+          const x = side * (4.8 + (row % 3) * 4.4 + rng() * 2.5);
+          const z = -4.0 - row * 3.0 - rng() * 2.0;
+          const bw = 2.4 + rng() * 2.8;
+          const bd = 2.4 + rng() * 2.8;
+          const bh = 7.0 + rng() * 20.0;
+
+          const box = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), bMat);
+          box.position.set(x, bh / 2, z);
+          portalDynamicGroup.add(box);
+
+          const rim = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.1, 0.16, bd + 0.1), neonMat);
+          rim.position.set(x, bh + 0.08, z);
+          portalDynamicGroup.add(rim);
+        }
+        return;
+      }
+
+      if (type === 'mountains') {
+        const isSnow = world.groundKey === 'snow';
+        const isVolcano = world.groundKey === 'volcano';
+        const bodyCol = isVolcano ? 0x292524 : (isSnow ? 0x334155 : 0x3f6212);
+        const peakCol = isVolcano ? 0xf97316 : (isSnow ? 0xf8fafc : 0x65a30d);
+
+        for (let i = 0; i < 20; i++) {
+          const ang = (i / 20) * Math.PI * 2 + (rng() - 0.5) * 0.2;
+          const dist = 30 + rng() * 32;
+          const r = 9 + rng() * 12;
+          const h = 15 + rng() * 22;
+
+          const g = new THREE.Group();
+          const mt = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), new THREE.MeshStandardMaterial({ color: bodyCol, roughness: 0.9, flatShading: true }));
+          mt.position.y = h / 2 - 0.5;
+          const pk = new THREE.Mesh(new THREE.ConeGeometry(r * 0.35, h * 0.35, 6), new THREE.MeshStandardMaterial({ color: peakCol, emissive: isVolcano ? 0xea580c : 0x000000, emissiveIntensity: isVolcano ? 0.6 : 0, roughness: 0.6, flatShading: true }));
+          pk.position.y = h * 0.83 - 0.5;
+          g.add(mt, pk);
+          g.position.set(Math.cos(ang) * dist, 0, Math.sin(ang) * dist - 14);
+          portalDynamicGroup.add(g);
+        }
+        return;
+      }
+
+      if (type === 'palm') {
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.9 });
+        const leafMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.75, side: THREE.DoubleSide });
+
+        for (let i = 0; i < 10; i++) {
+          const ang = (i / 10) * Math.PI * 2;
+          const dist = 4.2 + rng() * 3.0;
+          const x = Math.cos(ang) * dist;
+          const z = Math.sin(ang) * dist - 2.8;
+          if (Math.abs(x) < 2.2 && z > -5 && z < 2) continue;
+
+          const palm = new THREE.Group();
+          const h = 4.0 + rng() * 2.0;
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.24, h, 7), trunkMat);
+          trunk.position.y = h / 2;
+          trunk.rotation.z = (rng() - 0.5) * 0.22;
+          palm.add(trunk);
+
+          for (let f = 0; f < 6; f++) {
+            const frond = new THREE.Mesh(new THREE.ConeGeometry(0.45, 2.4, 4), leafMat);
+            frond.position.set(0, h, 0);
+            frond.rotation.z = Math.PI * 0.42;
+            frond.rotation.y = (f / 6) * Math.PI * 2;
+            frond.translateY(1.0);
+            palm.add(frond);
+          }
+          palm.position.set(x, 0, z);
+          portalDynamicGroup.add(palm);
+        }
+        return;
+      }
+
+      // sakura / pine / trees
+      const count = type === 'sakura' ? 28 : 34;
+      for (let i = 0; i < count; i++) {
+        let x, z;
+        if (type === 'sakura') {
+          const side = i % 2 === 0 ? -1 : 1;
+          const row = Math.floor(i / 2);
+          x = side * (3.8 + (row % 2) * 3.2 + rng() * 1.8);
+          z = -3.5 - row * 2.9 - rng() * 1.6;
+        } else {
+          const ang = rng() * Math.PI * 2;
+          const dist = 5.5 + rng() * 34;
+          x = Math.cos(ang) * dist;
+          z = Math.sin(ang) * dist - 10;
+          if (Math.abs(x) < 3.0 && z > -24 && z < 4) x += x >= 0 ? 3.8 : -3.8;
+        }
+
+        const sc = 0.78 + rng() * 0.7;
+        const tree = new THREE.Group();
+
+        if (type === 'pine') {
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * sc, 0.24 * sc, 1.4 * sc, 6), new THREE.MeshStandardMaterial({ color: 0x4b3621 }));
+          trunk.position.y = 0.7 * sc;
+          tree.add(trunk);
+          const pMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.8, flatShading: true });
+          for (let t = 0; t < 3; t++) {
+            const cone = new THREE.Mesh(new THREE.ConeGeometry((1.35 - t * 0.3) * sc, (1.85 - t * 0.25) * sc, 7), pMat);
+            cone.position.y = (1.65 + t * 1.1) * sc;
+            tree.add(cone);
+          }
+          if (world.groundKey === 'snow') {
+            const cap = new THREE.Mesh(new THREE.ConeGeometry(0.62 * sc, 0.9 * sc, 7), new THREE.MeshStandardMaterial({ color: 0xf8fafc, flatShading: true }));
+            cap.position.y = 4.35 * sc;
+            tree.add(cap);
+          }
+        } else {
+          const isSakura = type === 'sakura';
+          const trunk = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.14 * sc, 0.25 * sc, 2.2 * sc, 7),
+            new THREE.MeshStandardMaterial({ color: isSakura ? 0x4a3228 : 0x5c4033, roughness: 0.9 })
+          );
+          trunk.position.y = 1.1 * sc;
+          tree.add(trunk);
+
+          const col = isSakura ? (rng() > 0.4 ? 0xf9a8d4 : 0xfbcfe8) : (rng() > 0.4 ? 0x15803d : 0x22c55e);
+          const lMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.75, flatShading: true });
+          [[0, 2.6, 0, 1.25], [-0.7, 2.2, 0.4, 0.85], [0.75, 2.3, -0.35, 0.9], [0.15, 3.2, 0.2, 0.8]].forEach(([cx, cy, cz, cr]) => {
+            const puff = new THREE.Mesh(new THREE.DodecahedronGeometry(cr * sc, 0), lMat);
+            puff.position.set(cx * sc, cy * sc, cz * sc);
+            tree.add(puff);
+          });
+        }
+
+        tree.position.set(x, 0, z);
+        portalDynamicGroup.add(tree);
+      }
+    }
+
+    function buildParticles(world, rng) {
+      const type = world.particleKey;
+      if (!type || type === 'none') return;
+
+      const count = type === 'rain' ? 950 : 480;
+      const positions = new Float32Array(count * 3);
+      const speeds = new Float32Array(count);
+      const phases = new Float32Array(count);
+
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = (rng() - 0.5) * 58;
+        positions[i * 3 + 1] = rng() * 24;
+        positions[i * 3 + 2] = (rng() - 0.5) * 68 - 12;
+        speeds[i] = 0.6 + rng() * 0.85;
+        phases[i] = rng() * Math.PI * 2;
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      const colorMap = {
+        snow: '#ffffff',
+        rain: '#7dd3fc',
+        petals: '#fbcfe8',
+        fireflies: '#fef08a',
+        stars: '#e0f2fe',
+        embers: '#fb923c'
+      };
+      const sizeMap = { snow: 0.22, rain: 0.14, petals: 0.28, fireflies: 0.3, stars: 0.24, embers: 0.26 };
+
+      const additive = (type === 'fireflies' || type === 'stars' || type === 'embers');
+      const mat = new THREE.PointsMaterial({
+        color: new THREE.Color(colorMap[type] || '#ffffff'),
+        size: sizeMap[type] || 0.22,
+        transparent: true,
+        opacity: additive ? 0.95 : 0.82,
+        blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+        depthWrite: false
+      });
+
+      particleSystem = new THREE.Points(geo, mat);
+      particleMeta = { type, count, speeds, phases };
+      portalDynamicGroup.add(particleSystem);
+    }
+
+    // =========================================================================
+    // 8. 双方向ポータル通過＆UI操作
+    // =========================================================================
+    function switchSpace(enterWorld) {
+      if (state.inWorld === enterWorld) return;
+      state.inWorld = enterWorld;
+      state.portalCooldown = 0.65;
+      playPortalChord(enterWorld);
+
+      if (enterWorld) {
+        homeScene.remove(doorGroup);
+        portalScene.add(doorGroup);
+        applyStencilTestToScene(portalScene, false);
+        applyStencilTestToScene(homeScene, true);
+        portalMaskFront.visible = false;
+        portalMaskBack.visible = true;
+      } else {
+        portalScene.remove(doorGroup);
+        homeScene.add(doorGroup);
+        applyStencilTestToScene(homeScene, false);
+        applyStencilTestToScene(portalScene, true);
+        portalMaskFront.visible = true;
+        portalMaskBack.visible = false;
+      }
+      updateHUD();
+    }
+
+    let toastTimer = null;
+    function showToast(msg, icon = '✨') {
+      const el = document.getElementById('toast-message');
+      document.getElementById('toast-text').textContent = msg;
+      document.getElementById('toast-icon').textContent = icon;
+      el.classList.remove('toast-enter');
+      el.classList.add('toast-active');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        el.classList.remove('toast-active');
+        el.classList.add('toast-enter');
+      }, 3000);
+    }
+
+    function updateHUD() {
+      const dot = document.getElementById('location-dot');
+      const label = document.getElementById('location-label');
+      const enterBtn = document.getElementById('btn-enter-exit');
+      const enterText = document.getElementById('enter-exit-text');
+      const enterIcon = document.getElementById('enter-exit-icon');
+      const toggleDoorBtn = document.getElementById('btn-toggle-door');
+
+      if (state.inWorld) {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.9)]';
+        label.textContent = state.currentWorldData?.title || '異空間';
+        enterText.textContent = 'ドアをくぐって元の部屋に戻る';
+        enterIcon.textContent = '🏠';
+        enterBtn.disabled = false;
+      } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]';
+        label.textContent = '白いギャラリー空間';
+        enterText.textContent = 'ドアをくぐって中へ入る';
+        enterIcon.textContent = '🚶';
+        enterBtn.disabled = !state.doorOpen;
+      }
+      toggleDoorBtn.textContent = state.doorOpen ? 'ドアを閉める' : 'ドアを開ける';
+    }
+
+    function renderWorldInfoCard(world) {
+      const card = document.getElementById('world-info-card');
+      const badge = document.getElementById('world-mode-badge');
+      const tagsEl = document.getElementById('world-tags');
+
+      document.getElementById('world-title').textContent = world.title;
+      document.getElementById('world-desc').textContent = world.description;
+
+      if (world.isProceduralHash) {
+        badge.textContent = 'ハッシュ自動合成';
+        badge.className = 'text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-purple-500/35 text-purple-200 border border-purple-400/40';
+      } else {
+        badge.textContent = 'キーワード解析合成';
+        badge.className = 'text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-sky-500/30 text-sky-200 border border-sky-400/35';
+      }
+
+      tagsEl.innerHTML = '';
+      world.tags.forEach((t) => {
+        const span = document.createElement('span');
+        span.className = 'text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/85 border border-white/15';
+        span.textContent = `${t.category}: ${t.label}`;
+        tagsEl.appendChild(span);
+      });
+
+      card.classList.remove('opacity-0', 'translate-y-[-8px]');
+      card.classList.add('opacity-100', 'translate-y-0');
+    }
+
+    async function generateAndOpen(destinationText) {
+      const query = (destinationText || '').trim();
+      if (!query) {
+        showToast('行きたい場所を入力するか、ランダムボタンを押してください', '✏️');
+        return;
+      }
+
+      // ドアが開いている待機空間なら一瞬閉じてから新しい世界へ開く演出
+      if (!state.inWorld && state.doorOpen) {
+        state.doorOpen = false;
+        state.targetDoorAngle = 0;
+        playDoorSound(false);
+        await new Promise((r) => setTimeout(r, 340));
+      }
+
+      const worldData = analyzePromptOffline(query);
+      state.currentWorldData = worldData;
+      buildPortalWorld(worldData);
+      renderWorldInfoCard(worldData);
+
+      // ドアを開く＋発光パルス
+      state.doorOpen = true;
+      state.targetDoorAngle = OPEN_ANGLE;
+      state.glowPulse = 1.0;
+      playDoorSound(true);
+      playPortalChord(true);
+
+      if (!state.inWorld && camera.position.z < 0.8) {
+        startAutoWalk(new THREE.Vector3(0, EYE_HEIGHT, 4.8), 0, 0.02);
+      }
+
+      updateHUD();
+      showToast(
+        state.inWorld
+          ? `空間が「${worldData.title}」へ変化しました`
+          : `ドアの向こうに「${worldData.title}」が現れました！`,
+        '✨'
+      );
+    }
+
+    function generateRandomDestination() {
+      const times = ['夕暮れの', 'オーロラの', '満天の星空と', '幻想的な霧の', '朝日の', 'ネオン輝く夜の', '深宇宙の'];
+      const places = [
+        '桜とお城', '雪山と針葉樹', '竹林と赤い鳥居', '東京タワーと摩天楼',
+        '砂漠とピラミッド', '青い海とヤシの木', 'クリスタル古代遺跡', '火の粉舞う火山遺跡',
+        '浮遊惑星とクリスタル', '蛍の舞う静かな森'
+      ];
+      const phrase = times[Math.floor(Math.random() * times.length)] + places[Math.floor(Math.random() * places.length)];
+      document.getElementById('destination-input').value = phrase;
+      generateAndOpen(phrase);
+    }
+
+    function startAutoWalk(targetPos, targetYaw, targetPitch) {
+      state.autoWalk.active = true;
+      state.autoWalk.targetPos.copy(targetPos);
+      state.autoWalk.targetYaw = targetYaw;
+      state.autoWalk.targetPitch = targetPitch;
+    }
+
+    function bindEvents() {
+      document.getElementById('portal-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = document.getElementById('destination-input');
+        generateAndOpen(input.value);
+        input.blur();
+      });
+
+      document.getElementById('btn-random').addEventListener('click', generateRandomDestination);
+
+      document.querySelectorAll('.preset-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const prompt = chip.getAttribute('data-prompt');
+          document.getElementById('destination-input').value = prompt;
+          generateAndOpen(prompt);
+        });
+      });
+
+      // ドアをくぐるボタン
+      document.getElementById('btn-enter-exit').addEventListener('click', () => {
+        if (!state.doorOpen) {
+          state.doorOpen = true;
+          state.targetDoorAngle = OPEN_ANGLE;
+          playDoorSound(true);
+          updateHUD();
+        }
+        if (!state.inWorld) {
+          startAutoWalk(new THREE.Vector3(0, EYE_HEIGHT, -6.2), 0, 0.03);
+        } else {
+          startAutoWalk(new THREE.Vector3(0, EYE_HEIGHT, 5.2), 0, 0.02);
+        }
+      });
+
+      // ドア開閉トグル
+      document.getElementById('btn-toggle-door').addEventListener('click', () => {
+        state.doorOpen = !state.doorOpen;
+        state.targetDoorAngle = state.doorOpen ? OPEN_ANGLE : 0;
+        if (!state.doorOpen) state.autoWalk.active = false;
+        playDoorSound(state.doorOpen);
+        if (state.doorOpen && state.currentWorldData) {
+          renderWorldInfoCard(state.currentWorldData);
+        }
+        updateHUD();
+      });
+
+      // パネル折りたたみ
+      document.getElementById('btn-toggle-panel').addEventListener('click', () => {
+        state.panelCollapsed = !state.panelCollapsed;
+        const panel = document.getElementById('control-panel');
+        const chev = document.getElementById('toggle-chevron');
+        const lbl = document.getElementById('toggle-label');
+        panel.classList.toggle('hidden', state.panelCollapsed);
+        chev.style.transform = state.panelCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+        lbl.textContent = state.panelCollapsed ? '操作パネルを開く' : 'UIを隠して3Dを広く見る';
+      });
+
+      // 効果音ミュート切替
+      document.getElementById('btn-sound').addEventListener('click', () => {
+        state.soundEnabled = !state.soundEnabled;
+        document.getElementById('icon-sound-on').classList.toggle('hidden', !state.soundEnabled);
+        document.getElementById('icon-sound-off').classList.toggle('hidden', state.soundEnabled);
+        showToast(state.soundEnabled ? '効果音：オン' : '効果音：オフ', state.soundEnabled ? '🔊' : '🔇');
+      });
+
+      // 視点リセット
+      document.getElementById('btn-reset-cam').addEventListener('click', () => {
+        if (state.inWorld) {
+          startAutoWalk(new THREE.Vector3(0, EYE_HEIGHT, -6.2), 0, 0.03);
+        } else {
+          startAutoWalk(new THREE.Vector3(0, EYE_HEIGHT, 5.2), 0, 0.02);
+        }
+      });
+
+      bindMovementControls();
+    }
+
+    function bindMovementControls() {
+      const canvas = renderer.domElement;
+      const pad = document.getElementById('mobile-move-pad');
+      const padToggle = document.getElementById('btn-toggle-pad');
+
+      canvas.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || state.lookPointerId !== null) return;
+        canvas.setPointerCapture(event.pointerId);
+        state.lookPointerId = event.pointerId;
+        state.lastPointerX = event.clientX;
+        state.lastPointerY = event.clientY;
+        state.autoWalk.active = false;
+      });
+      canvas.addEventListener('pointermove', (event) => {
+        if (state.lookPointerId !== event.pointerId) return;
+        state.yaw -= (event.clientX - state.lastPointerX) * 0.0042;
+        state.pitch = THREE.MathUtils.clamp(
+          state.pitch - (event.clientY - state.lastPointerY) * 0.0042,
+          -Math.PI * 0.42, Math.PI * 0.42
+        );
+        state.lastPointerX = event.clientX;
+        state.lastPointerY = event.clientY;
+      });
+      function stopLooking(event) {
+        if (event.pointerId === state.lookPointerId) state.lookPointerId = null;
+      }
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+        canvas.addEventListener(type, stopLooking);
+      }
+
+      window.addEventListener('keydown', (event) => {
+        if (!movementKeys.has(event.code) || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+        if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable]')) return;
+        event.preventDefault();
+        state.heldKeys.add(event.code);
+        state.autoWalk.active = false;
+      });
+      window.addEventListener('keyup', (event) => state.heldKeys.delete(event.code));
+      document.getElementById('destination-input').addEventListener('focus', () => state.heldKeys.clear());
+
+      function stopPadPointer(id) {
+        const button = state.padPointers.get(id);
+        if (!button) return;
+        state.padPointers.delete(id);
+        if (![...state.padPointers.values()].includes(button)) button.classList.remove('is-held');
+      }
+      function clearPad() {
+        for (const [id, button] of state.padPointers) {
+          stopPadPointer(id);
+          if (button.hasPointerCapture(id)) button.releasePointerCapture(id);
+        }
+      }
+      for (const button of pad.querySelectorAll('[data-move]')) {
+        button.addEventListener('pointerdown', (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          button.setPointerCapture(event.pointerId);
+          state.padPointers.set(event.pointerId, button);
+          button.classList.add('is-held');
+          state.autoWalk.active = false;
+        });
+        for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+          button.addEventListener(type, (event) => stopPadPointer(event.pointerId));
+        }
+      }
+
+      const isPadVisible = () => getComputedStyle(pad).display !== 'none';
+      function syncPadVisibility() {
+        const visible = isPadVisible();
+        padToggle.setAttribute('aria-expanded', String(visible));
+        if (!visible) clearPad();
+      }
+      padToggle.addEventListener('click', () => {
+        const willShow = !isPadVisible();
+        pad.style.display = willShow ? 'flex' : 'none';
+        syncPadVisibility();
+        showToast(willShow ? '移動パッドを表示しました' : '移動パッドを非表示にしました', '🕹️');
+      });
+      syncPadVisibility();
+      window.addEventListener('resize', syncPadVisibility);
+
+      function releaseControls() {
+        state.heldKeys.clear();
+        clearPad();
+        const id = state.lookPointerId;
+        state.lookPointerId = null;
+        if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+      }
+      window.addEventListener('blur', releaseControls);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) releaseControls();
+      });
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('canvas-container');
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    // =========================================================================
+    // 9. アニメーション＆ステンシルバッファ・マルチパス描画
+    // =========================================================================
+    function updateMovement(dt) {
+      const prevZ = camera.position.z;
+
+      if (state.autoWalk.active) {
+        const target = state.autoWalk.targetPos;
+        const crossing = state.inWorld ? target.z > 0 : target.z < 0;
+        // 連続で「入る」「戻る」を押しても、通過判定が有効になるまで待つ。
+        if (crossing && (state.portalCooldown > 0 || Math.abs(state.doorAngle) <= 0.55)) {
+          state.portalCooldown = Math.max(0, state.portalCooldown - dt);
+          return;
+        }
+        const waypoint = crossing && Math.abs(camera.position.x) > 0.35
+          ? new THREE.Vector3(0, EYE_HEIGHT, state.inWorld ? -1.5 : 1.5)
+          : target;
+
+        const dir = new THREE.Vector3().subVectors(waypoint, camera.position);
+        const dist = dir.length();
+        const step = 5.4 * dt;
+
+        if (dist <= step && waypoint === target) {
+          camera.position.copy(target);
+          state.autoWalk.active = false;
+        } else {
+          dir.normalize().multiplyScalar(Math.min(step, dist));
+          camera.position.add(dir);
+        }
+        state.yaw += (state.autoWalk.targetYaw - state.yaw) * Math.min(1, dt * 4.5);
+        state.pitch += (state.autoWalk.targetPitch - state.pitch) * Math.min(1, dt * 4.5);
+      } else {
+        const directions = new Set();
+        for (const key of state.heldKeys) directions.add(movementKeys.get(key));
+        for (const button of state.padPointers.values()) directions.add(button.dataset.move);
+        const forward = Number(directions.has('forward')) - Number(directions.has('backward'));
+        const right = Number(directions.has('right')) - Number(directions.has('left'));
+        const scale = 5.4 * dt / Math.max(1, Math.hypot(forward, right));
+        const sin = Math.sin(state.yaw);
+        const cos = Math.cos(state.yaw);
+        camera.position.x += (-sin * forward + cos * right) * scale;
+        camera.position.z += (-cos * forward - sin * right) * scale;
+      }
+
+      const maxR = state.inWorld ? 46 : 22;
+      const r = Math.hypot(camera.position.x, camera.position.z);
+      if (r > maxR) {
+        camera.position.x *= maxR / r;
+        camera.position.z *= maxR / r;
+      }
+      camera.position.y = EYE_HEIGHT;
+      camera.rotation.y = state.yaw;
+      camera.rotation.x = state.pitch;
+
+      // ドア通過判定（z = 0 を横幅内で跨いだとき）
+      if (state.portalCooldown > 0) {
+        state.portalCooldown -= dt;
+      } else if (state.doorOpen && Math.abs(state.doorAngle) > 0.55) {
+        if (Math.abs(camera.position.x) < DOOR_WIDTH * 0.52) {
+          if (!state.inWorld && prevZ >= 0 && camera.position.z < 0) {
+            switchSpace(true);
+          } else if (state.inWorld && prevZ <= 0 && camera.position.z > 0) {
+            switchSpace(false);
+          }
+        }
+      }
+    }
+
+    function updateWorldAnimations(elapsed, dt) {
+      // ドアの滑らかな開閉
+      state.doorAngle += (state.targetDoorAngle - state.doorAngle) * Math.min(1, dt * 5.2);
+      doorPivot.rotation.y = state.doorAngle;
+
+      // 生成直後のドア枠発光パルス
+      if (state.glowPulse > 0) {
+        state.glowPulse = Math.max(0, state.glowPulse - dt * 0.9);
+        doorGlowMesh.material.opacity = state.glowPulse * 0.85;
+      }
+
+      // 波打つ海面
+      if (animatedWaterMesh) {
+        const pos = animatedWaterMesh.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i);
+          const z = pos.getZ(i);
+          pos.setY(i, Math.sin(x * 0.17 + elapsed * 1.4) * 0.18 + Math.cos(z * 0.21 + elapsed * 1.1) * 0.14);
+        }
+        pos.needsUpdate = true;
+      }
+
+      // オーロラ
+      if (animatedAuroraMesh) {
+        animatedAuroraMesh.material.uniforms.uTime.value = elapsed;
+      }
+
+      // 浮遊クリスタル
+      animatedFloaters.forEach((f) => {
+        f.position.y = f.userData.baseY + Math.sin(elapsed * f.userData.speed + f.userData.phase) * 0.45;
+        f.rotation.y += dt * 0.5;
+      });
+
+      // 惑星自転
+      animatedPlanets.forEach((p) => {
+        p.rotation.y += p.userData.rotSpeed * dt;
+      });
+
+      // パーティクル
+      if (particleSystem && particleMeta) {
+        const pos = particleSystem.geometry.attributes.position;
+        const { type, count, speeds, phases } = particleMeta;
+        for (let i = 0; i < count; i++) {
+          let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+          const sp = speeds[i], ph = phases[i];
+
+          if (type === 'rain') {
+            y -= 19.0 * sp * dt;
+            if (y < 0) y = 23;
+          } else if (type === 'snow') {
+            y -= 1.6 * sp * dt;
+            x += Math.sin(elapsed * 0.9 + ph) * 0.5 * dt;
+            if (y < 0) y = 22;
+          } else if (type === 'petals') {
+            y -= 1.25 * sp * dt;
+            x += Math.sin(elapsed * 1.4 + ph) * 1.1 * dt;
+            z += Math.cos(elapsed * 1.1 + ph) * 0.6 * dt;
+            if (y < 0) { y = 19; x = (Math.random() - 0.5) * 46; }
+          } else if (type === 'embers') {
+            y += 2.2 * sp * dt;
+            x += Math.sin(elapsed * 2.0 + ph) * 0.7 * dt;
+            if (y > 20) y = 0.2;
+          } else if (type === 'fireflies') {
+            y += Math.sin(elapsed * 1.4 + ph) * 0.45 * dt;
+            x += Math.cos(elapsed * 0.7 + ph) * 0.35 * dt;
+            if (y < 0.4) y = 0.4;
+            if (y > 8.5) y = 8.5;
+          } else if (type === 'stars') {
+            y += Math.sin(elapsed * 0.6 + ph) * 0.18 * dt;
+          }
+          pos.setXYZ(i, x, y, z);
+        }
+        pos.needsUpdate = true;
+      }
+    }
+
+    function renderPortal() {
+      renderer.clear(true, true, true);
+
+      if (!state.inWorld) {
+        // 待機空間 → 前面マスクでステンシル=1 → 深度クリア → 異空間をドア枠内のみ描画
+        renderer.render(homeScene, camera);
+        renderer.render(maskScene, camera);
+        renderer.clearDepth();
+        renderer.render(portalScene, camera);
+      } else {
+        // 異空間 → 背面マスクでステンシル=1 → 深度クリア → 待機空間をドア枠内のみ描画
+        renderer.render(portalScene, camera);
+        renderer.render(maskScene, camera);
+        renderer.clearDepth();
+        renderer.render(homeScene, camera);
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      updateMovement(dt);
+      updateWorldAnimations(clock.elapsedTime, dt);
+      renderPortal();
+    }
+
+    // =========================================================================
+    // 10. 起動処理
+    // =========================================================================
+    window.onload = function () {
+      initThree();
+      bindEvents();
+      updateHUD();
+      animate();
+      showToast('行きたい場所を入力してドアを開けてください', '🚪');
+    };
+  </script>
+</body>
+</html>

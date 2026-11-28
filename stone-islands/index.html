@@ -1,0 +1,3438 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>石版の島々 〜アルトとリナの箱庭冒険〜</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js r128 (通常のscriptタグで確実に読み込み) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- 丸みのある読みやすい日本語フォント -->
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f172a;
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      touch-action: none;
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* チルトシフト風ミニチュアボケ（上下端のみ） */
+    .tilt-shift-top {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 13vh;
+      pointer-events: none;
+      backdrop-filter: blur(3.5px);
+      -webkit-backdrop-filter: blur(3.5px);
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+      z-index: 5;
+    }
+    .tilt-shift-bottom {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 12vh;
+      pointer-events: none;
+      backdrop-filter: blur(3.5px);
+      -webkit-backdrop-filter: blur(3.5px);
+      mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+      -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+      z-index: 5;
+    }
+
+    /* ワープ時の光フラッシュオーバーレイ */
+    #warp-flash {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle, #ffffff 0%, #bae6fd 55%, #38bdf8 100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.45s ease;
+      z-index: 60;
+    }
+
+    /* クラシックRPG風ウィンドウ（黒背景＋白の二重枠線） */
+    .dq-window {
+      background: rgba(10, 15, 28, 0.93);
+      border: 3px solid #ffffff;
+      border-radius: 12px;
+      box-shadow:
+        0 0 0 2px #0a0f1c,
+        inset 0 0 0 2px rgba(255, 255, 255, 0.32),
+        0 10px 26px rgba(0, 0, 0, 0.58);
+      color: #ffffff;
+      text-shadow: 1px 1px 0px #000000;
+    }
+
+    .dq-btn {
+      background: rgba(20, 29, 50, 0.92);
+      border: 2.5px solid #ffffff;
+      border-radius: 10px;
+      color: #ffffff;
+      font-weight: 700;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.55), 0 0 0 1.5px #0a0f1c;
+      transition: transform 0.08s ease, background-color 0.15s ease;
+      cursor: pointer;
+    }
+    .dq-btn:hover {
+      background: rgba(45, 65, 110, 0.96);
+    }
+    .dq-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 0 1.5px #0a0f1c;
+    }
+    .dq-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* バトルコマンドの選択カーソル */
+    .cmd-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      text-align: left;
+      font-weight: 700;
+      transition: background 0.12s;
+      cursor: pointer;
+    }
+    .cmd-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+    .cmd-btn::before {
+      content: "▶";
+      opacity: 0;
+      font-size: 0.8em;
+      color: #fde047;
+      transition: opacity 0.12s;
+    }
+    .cmd-btn:hover::before, .cmd-btn:focus::before {
+      opacity: 1;
+    }
+
+    /* ダメージ数値ポップアップ */
+    @keyframes floatUpFade {
+      0% { transform: translate(-50%, 0) scale(0.7); opacity: 0; }
+      20% { transform: translate(-50%, -18px) scale(1.25); opacity: 1; }
+      75% { transform: translate(-50%, -44px) scale(1.0); opacity: 1; }
+      100% { transform: translate(-50%, -62px) scale(0.95); opacity: 0; }
+    }
+    .damage-popup {
+      position: fixed;
+      pointer-events: none;
+      font-weight: 800;
+      font-size: 1.65rem;
+      text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+      animation: floatUpFade 0.95s ease-out forwards;
+      z-index: 45;
+    }
+
+    /* バーチャルジョイスティック */
+    #joystick-zone {
+      position: fixed;
+      bottom: 22px;
+      left: 22px;
+      width: 118px;
+      height: 118px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.42);
+      border: 2.5px solid rgba(255, 255, 255, 0.68);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      z-index: 20;
+      touch-action: none;
+    }
+    #joystick-knob {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 48px;
+      height: 48px;
+      margin-left: -24px;
+      margin-top: -24px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ffffff, #cbd5e1);
+      border: 2px solid #1e293b;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+    }
+
+    @keyframes blinkArrow {
+      0%, 100% { opacity: 1; transform: translateY(0); }
+      50% { opacity: 0.2; transform: translateY(3px); }
+    }
+    .next-arrow {
+      display: inline-block;
+      animation: blinkArrow 0.8s infinite;
+    }
+
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.35);
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Three.js レンダリングキャンバス -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- チルトシフト風ボケオーバーレイ -->
+  <div class="tilt-shift-top"></div>
+  <div class="tilt-shift-bottom"></div>
+
+  <!-- ワープ時フラッシュ -->
+  <div id="warp-flash"></div>
+
+  <!-- ダメージポップアップレイヤー -->
+  <div id="popup-layer"></div>
+
+  <!-- 左上：パーティステータスウィンドウ -->
+  <div class="fixed top-3 left-3 z-20 flex flex-col sm:flex-row gap-2 items-start">
+    <!-- 勇者アルト -->
+    <div class="dq-window px-3 py-2 min-w-[162px] sm:min-w-[186px]">
+      <div class="flex items-center justify-between border-b border-white/30 pb-1 mb-1">
+        <span class="font-extrabold text-xs sm:text-sm tracking-wide text-amber-300">アルト</span>
+        <span class="text-[11px] font-bold bg-white/15 px-1.5 py-0.5 rounded-full">Lv.<span id="stat-lv">1</span></span>
+      </div>
+      <div class="space-y-1 text-[11px] sm:text-xs font-bold">
+        <div class="flex justify-between">
+          <span class="text-emerald-300">HP</span>
+          <span><span id="stat-hp">34</span>/<span id="stat-maxhp">34</span></span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+          <div id="bar-hp" class="h-full bg-emerald-400 transition-all duration-300" style="width: 100%"></div>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-sky-300">MP</span>
+          <span><span id="stat-mp">14</span>/<span id="stat-maxmp">14</span></span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+          <div id="bar-mp" class="h-full bg-sky-400 transition-all duration-300" style="width: 100%"></div>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-300 pt-0.5 border-t border-white/15">
+          <span>EXP <span id="stat-exp">0</span>/<span id="stat-nextexp">20</span></span>
+          <span class="text-amber-200"><span id="stat-gold">0</span>G</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 仲間：少女リナ（加入後に表示） -->
+    <div id="lina-status-card" class="dq-window px-3 py-2 min-w-[138px] hidden border-pink-200">
+      <div class="flex items-center justify-between border-b border-white/30 pb-1 mb-1">
+        <span class="font-extrabold text-xs sm:text-sm text-pink-300">リナ</span>
+        <span class="text-[10px] font-bold bg-pink-500/30 text-pink-100 px-1.5 py-0.5 rounded-full">仲間</span>
+      </div>
+      <div class="space-y-1 text-[11px] sm:text-xs font-bold">
+        <div class="flex justify-between">
+          <span class="text-emerald-300">HP</span>
+          <span><span id="lina-hp">26</span>/<span id="lina-maxhp">26</span></span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+          <div id="bar-lina-hp" class="h-full bg-pink-400 transition-all duration-300" style="width: 100%"></div>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-sky-300">MP</span>
+          <span><span id="lina-mp">18</span>/<span id="lina-maxmp">18</span></span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+          <div id="bar-lina-mp" class="h-full bg-sky-300 transition-all duration-300" style="width: 100%"></div>
+        </div>
+      </div>
+    </div>
+    <!-- モバイル向け紋章ミニバー -->
+    <div class="flex lg:hidden items-center gap-1 bg-black/60 px-2.5 py-1 rounded-full border border-white/25 text-[10px] font-bold pointer-events-none">
+      <span id="island-title-mobile" class="text-amber-200 mr-1">はじまりの島</span>
+      <span id="crest-green-m" class="opacity-35">🌿</span>
+      <span id="crest-desert-m" class="opacity-35">🏜️</span>
+      <span id="crest-snow-m" class="opacity-35">❄️</span>
+    </div>
+  </div>
+
+  <!-- 上部中央：現在の島名＆3つの石版の紋章HUD -->
+  <div class="fixed top-3 left-1/2 -translate-x-1/2 z-10 hidden lg:flex flex-col items-center gap-1.5 pointer-events-none">
+    <h1 class="text-white text-sm font-extrabold rounded-full bg-black/65 px-4 py-1">石版の島々 〜アルトとリナの箱庭冒険〜</h1>
+    <div class="flex items-center gap-2 bg-black/60 text-white border border-white/40 px-4 py-1 rounded-full text-xs font-extrabold backdrop-blur-sm shadow">
+      <span id="island-icon">🌿</span>
+      <span id="island-title">はじまりの島</span>
+    </div>
+    <div class="flex items-center gap-2 bg-black/55 px-3 py-1 rounded-full border border-white/25 text-[11px] font-bold">
+      <span class="text-slate-300">石版の紋章:</span>
+      <span id="crest-green" class="px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-400 transition">🌿 緑</span>
+      <span id="crest-desert" class="px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-400 transition">🏜️ 砂</span>
+      <span id="crest-snow" class="px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-400 transition">❄️ 雪</span>
+    </div>
+  </div>
+
+  <!-- 右上：ツールボタン群 -->
+  <div class="fixed top-3 right-3 z-20 flex flex-wrap justify-end gap-1.5 max-w-[54vw]">
+    <button id="btn-time" class="dq-btn px-2.5 py-1.5 text-xs sm:text-sm" title="昼・夕方・夜切替">☀️ 昼</button>
+    <button id="btn-cam-left" class="dq-btn px-2.5 py-1.5 text-xs sm:text-sm" title="カメラ左回転">↺</button>
+    <button id="btn-cam-right" class="dq-btn px-2.5 py-1.5 text-xs sm:text-sm" title="カメラ右回転">↻</button>
+    <button id="btn-studio" class="dq-btn px-2.5 py-1.5 text-xs sm:text-sm bg-indigo-900/90 border-amber-300 text-amber-100">🎨 キャラ画像変更</button>
+    <button id="btn-sound" class="dq-btn px-2.5 py-1.5 text-xs sm:text-sm" title="BGM/SE切替">🔊 BGM/SE</button>
+  </div>
+
+  <!-- 操作ヒント（PC向け） -->
+  <div class="fixed bottom-4 left-40 z-10 hidden lg:block bg-black/55 text-white/90 text-xs px-3 py-1.5 rounded-lg border border-white/25 pointer-events-none">
+    移動: WASD / 矢印キー　｜　はなす・しらべる: Space / Enter　｜　視点回転: ドラッグ
+  </div>
+
+  <!-- 左下：バーチャルジョイスティック -->
+  <div id="joystick-zone">
+    <div id="joystick-knob"></div>
+  </div>
+
+  <!-- 右下：「しらべる / はなす」ボタン -->
+  <button id="btn-action" class="dq-btn fixed bottom-7 right-6 z-20 w-24 h-24 sm:w-28 sm:h-28 rounded-full flex flex-col items-center justify-center gap-1 border-[3px] bg-amber-600/90 hover:bg-amber-500/95 text-white shadow-xl">
+    <span class="text-2xl sm:text-3xl leading-none">💬</span>
+    <span id="btn-action-label" class="text-xs sm:text-sm font-extrabold">しらべる</span>
+  </button>
+
+  <!-- 会話ウィンドウ -->
+  <div id="dialog-box" class="dq-window fixed bottom-5 left-1/2 -translate-x-1/2 w-[92vw] max-w-[630px] p-4 sm:p-5 z-30 hidden cursor-pointer">
+    <div id="dialog-speaker" class="inline-block bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm px-2.5 py-0.5 rounded-md mb-2 shadow">村長</div>
+    <p id="dialog-text" class="text-sm sm:text-base leading-relaxed min-h-[3.2rem] font-bold tracking-wide whitespace-pre-line"></p>
+    <div class="text-right text-xs text-amber-300 mt-1">
+      <span id="dialog-next" class="next-arrow hidden">▼ つぎへ (クリック / Space)</span>
+    </div>
+  </div>
+
+  <!-- バトルUIコンテナ -->
+  <div id="battle-ui" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[94vw] max-w-[690px] z-30 hidden flex-col gap-2.5">
+    <!-- 敵ステータスバー -->
+    <div class="dq-window px-4 py-2 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-amber-300 font-extrabold text-sm sm:text-base" id="battle-enemy-name">スライム</span>
+      </div>
+      <div class="flex items-center gap-2 w-40 sm:w-56">
+        <span class="text-xs text-rose-300 font-bold">HP</span>
+        <div class="flex-1 h-2.5 bg-slate-700 rounded-full overflow-hidden border border-white/30">
+          <div id="battle-enemy-hp-bar" class="h-full bg-rose-500 transition-all duration-300" style="width: 100%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+      <!-- メインコマンド -->
+      <div id="battle-commands" class="dq-window sm:col-span-5 p-2.5 grid grid-cols-2 sm:grid-cols-1 gap-1 text-sm sm:text-base">
+        <button class="cmd-btn" data-cmd="attack">⚔️ たたかう</button>
+        <button class="cmd-btn" data-cmd="spell">✨ じゅもん</button>
+        <button class="cmd-btn" data-cmd="item">🌿 どうぐ <span class="text-xs text-emerald-300 ml-auto">×<span id="herb-count">3</span></span></button>
+        <button class="cmd-btn" data-cmd="run">💨 にげる</button>
+      </div>
+
+      <!-- じゅもんサブメニュー -->
+      <div id="battle-spells" class="dq-window sm:col-span-5 p-2.5 hidden flex-col gap-1 text-sm sm:text-base">
+        <button class="cmd-btn" data-spell="fire">🔥 火の矢 <span class="text-xs text-sky-300 ml-auto">MP4</span></button>
+        <button class="cmd-btn" data-spell="heal">💚 癒やしの光 <span class="text-xs text-sky-300 ml-auto">MP3</span></button>
+        <button class="cmd-btn text-slate-300" data-spell="back">↩️ もどる</button>
+      </div>
+
+      <!-- バトルメッセージ -->
+      <div class="dq-window sm:col-span-7 p-3.5 sm:p-4 flex items-center">
+        <p id="battle-log" class="text-sm sm:text-base font-bold leading-relaxed whitespace-pre-line"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 石版の台座 ワープメニューモーダル -->
+  <div id="warp-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div class="dq-window max-w-lg w-full p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-white/25 pb-2.5">
+        <h2 class="text-lg font-extrabold text-sky-300 flex items-center gap-2">
+          <span>🗿</span> 石版の台座 〜ワープ先を選択〜
+        </h2>
+        <button id="btn-warp-close" class="text-white/80 hover:text-white text-xl font-bold px-2">✕</button>
+      </div>
+      <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">
+        ふしぎな石版がまばゆく輝いている！ 旅立ちたいジオラマの島を選んでください。
+      </p>
+      <div id="warp-list" class="space-y-2.5"></div>
+    </div>
+  </div>
+
+  <!-- キャラ画像変更スタジオ（ローカル画像アップロード専用・オフライン対応） -->
+  <div id="studio-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-3">
+    <div class="dq-window w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-white/25 bg-white/5">
+        <h2 class="text-base sm:text-lg font-extrabold text-amber-300 flex items-center gap-2">
+          <span>🎨</span> ペーパークラフト キャラ画像変更
+        </h2>
+        <button id="btn-studio-close" class="text-white/80 hover:text-white text-xl font-bold px-2">✕</button>
+      </div>
+
+      <div class="p-4 overflow-y-auto custom-scroll space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1.5">1. カテゴリから差し替えるキャラクターを選ぶ（全22キャラ）</label>
+          <div id="studio-category-tabs" class="flex flex-wrap gap-1.5 mb-2"></div>
+          <div id="studio-char-list" class="grid grid-cols-3 sm:grid-cols-4 gap-1.5"></div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-4 items-center bg-slate-900/80 border border-white/20 rounded-xl p-4">
+          <div class="relative w-36 h-36 flex-shrink-0 rounded-lg bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:10px_10px] bg-slate-800 border border-white/25 flex items-center justify-center overflow-hidden">
+            <img id="studio-preview" alt="プレビュー" class="max-w-full max-h-full object-contain" />
+          </div>
+          <div class="flex-1 w-full space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <span id="studio-selected-name" class="font-extrabold text-amber-300 text-base">主人公アルト</span>
+              <span id="studio-custom-badge" class="hidden text-[10px] font-bold bg-emerald-500/30 text-emerald-200 border border-emerald-400/50 px-2 py-0.5 rounded-full">カスタム保存済み</span>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              手元の画像（PNG / JPG / WebPなど）をアップロードすると、自動で白背景を透過し、白いペーパークラフト風のフチを付けて即座に3D空間の板キャラへ反映します。<br>
+              変更した画像はブラウザに自動保存されます。
+            </p>
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              <label class="dq-btn px-4 py-2 text-xs sm:text-sm bg-emerald-700/90 hover:bg-emerald-600 border-emerald-300 cursor-pointer inline-flex items-center gap-1.5">
+                <span>📁 画像をアップロード</span>
+                <input id="file-upload" type="file" accept="image/*" class="hidden" />
+              </label>
+              <button id="btn-reset-sprite" class="dq-btn px-3.5 py-2 text-xs sm:text-sm bg-slate-700/90 hover:bg-slate-600">
+                ↺ デフォルトに戻す
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="studio-msg" class="text-xs font-bold text-center min-h-[1.2rem] text-emerald-300"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全3島クリアお祝いモーダル -->
+  <div id="clear-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+    <div class="dq-window max-w-md w-full p-6 text-center space-y-4">
+      <div class="text-5xl">✨🌿🏜️❄️✨</div>
+      <h2 class="text-2xl font-extrabold text-amber-300 tracking-wider">すべての石版が輝きを取り戻した！</h2>
+      <p class="text-sm sm:text-base leading-relaxed text-slate-100">
+        お見事です！ 勇者アルトは3つのジオラマ島のボスをすべて打ち倒し、すべての石版の紋章を灯しました。<br>
+        これからも3つの島を自由に旅したり、お気に入りの画像をキャラに貼って楽しんでください！
+      </p>
+      <button id="btn-clear-close" class="dq-btn px-6 py-2.5 text-base bg-amber-600 hover:bg-amber-500">冒険をつづける</button>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. レトロ効果音＆4種BGMエンジン（Web Audio API 完全シンセ生成・安全保護付き）
+    // =========================================================================
+    class RetroSoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.currentBgm = null;
+        this.bgmTimer = null;
+        this.stepIdx = 0;
+        this.initialized = false;
+
+        this.midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+        this.tracks = {
+          // ① はじまりの島：明るい冒険曲
+          green: {
+            tempo: 185,
+            leadWave: 'square',
+            bassWave: 'triangle',
+            leadVol: 0.042,
+            bassVol: 0.055,
+            lead: [
+              72, 0, 76, 79, 84, 0, 79, 76, 74, 0, 77, 81, 79, 0, 0, 0,
+              76, 0, 79, 84, 86, 0, 84, 79, 74, 76, 77, 74, 72, 0, 0, 0
+            ],
+            bass: [
+              48, 0, 55, 0, 48, 0, 55, 0, 53, 0, 57, 0, 55, 0, 43, 0,
+              48, 0, 52, 0, 53, 0, 50, 0, 55, 0, 55, 0, 48, 0, 48, 0
+            ]
+          },
+          // ② 砂漠の島：オリエンタルな砂漠曲
+          desert: {
+            tempo: 205,
+            leadWave: 'sawtooth',
+            bassWave: 'triangle',
+            leadVol: 0.034,
+            bassVol: 0.06,
+            lead: [
+              62, 63, 66, 67, 69, 0, 67, 66, 63, 0, 62, 0, 66, 67, 69, 0,
+              70, 69, 67, 66, 63, 66, 67, 0, 66, 63, 62, 0, 62, 0, 0, 0
+            ],
+            bass: [
+              50, 0, 50, 57, 50, 0, 57, 0, 51, 0, 51, 58, 50, 0, 57, 0,
+              55, 0, 55, 50, 51, 0, 50, 0, 50, 0, 57, 0, 50, 0, 50, 0
+            ]
+          },
+          // ③ 雪の島：オルゴール風の雪国曲
+          snow: {
+            tempo: 260,
+            leadWave: 'sine',
+            bassWave: 'sine',
+            leadVol: 0.065,
+            bassVol: 0.042,
+            lead: [
+              77, 0, 81, 0, 84, 0, 81, 79, 77, 0, 74, 0, 72, 0, 0, 0,
+              76, 0, 79, 0, 84, 0, 82, 79, 81, 0, 77, 0, 77, 0, 0, 0
+            ],
+            bass: [
+              53, 0, 60, 0, 57, 0, 60, 0, 58, 0, 62, 0, 60, 0, 55, 0,
+              55, 0, 60, 0, 52, 0, 55, 0, 53, 0, 60, 0, 53, 0, 0, 0
+            ]
+          },
+          // ④ バトル曲：テンポの良いRPG戦闘曲
+          battle: {
+            tempo: 130,
+            leadWave: 'square',
+            bassWave: 'sawtooth',
+            leadVol: 0.045,
+            bassVol: 0.042,
+            lead: [
+              64, 67, 71, 76, 75, 76, 79, 76, 74, 71, 74, 71, 67, 69, 71, 0,
+              64, 67, 71, 76, 79, 78, 76, 74, 72, 71, 69, 67, 66, 67, 64, 0
+            ],
+            bass: [
+              40, 40, 52, 40, 40, 40, 52, 40, 43, 43, 55, 43, 45, 45, 47, 47,
+              40, 40, 52, 40, 43, 43, 55, 43, 48, 48, 45, 45, 47, 47, 40, 40
+            ]
+          }
+        };
+      }
+
+      unlock() {
+        try {
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) this.ctx = new AudioCtx();
+          }
+          if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {});
+          }
+          if (!this.initialized) {
+            this.initialized = true;
+            if (this.currentBgm && !this.bgmTimer) {
+              this.startBgmLoop();
+            }
+          }
+        } catch (e) {
+          // 音声が制限された環境でも安全に続行
+        }
+      }
+
+      playTone(freq, duration, type = 'square', volume = 0.08, delay = 0, slideTo = null) {
+        if (this.muted) return;
+        try {
+          this.unlock();
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime + delay;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          if (slideTo) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), now + duration);
+          }
+          gain.gain.setValueAtTime(volume, now);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + duration + 0.02);
+        } catch (e) {
+          // 無視
+        }
+      }
+
+      playBgm(trackName) {
+        if (this.currentBgm === trackName && this.bgmTimer) return;
+        this.currentBgm = trackName;
+        this.stepIdx = 0;
+        if (this.bgmTimer) {
+          clearInterval(this.bgmTimer);
+          this.bgmTimer = null;
+        }
+        if (this.initialized) {
+          this.startBgmLoop();
+        }
+      }
+
+      startBgmLoop() {
+        if (this.bgmTimer) clearInterval(this.bgmTimer);
+        const track = this.tracks[this.currentBgm];
+        if (!track) return;
+        this.bgmTimer = setInterval(() => {
+          try {
+            if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+            const t = this.tracks[this.currentBgm];
+            if (!t) return;
+            const idx = this.stepIdx % t.lead.length;
+            const leadNote = t.lead[idx];
+            const bassNote = t.bass[idx];
+            const dur = (t.tempo / 1000) * 0.88;
+            if (leadNote > 0) {
+              this.playTone(this.midiToFreq(leadNote), dur * 1.15, t.leadWave, t.leadVol);
+            }
+            if (bassNote > 0) {
+              this.playTone(this.midiToFreq(bassNote), dur, t.bassWave, t.bassVol);
+            }
+            this.stepIdx++;
+          } catch (e) {
+            // 無視
+          }
+        }, track.tempo);
+      }
+
+      toggleMute() {
+        this.muted = !this.muted;
+        if (!this.muted) {
+          this.unlock();
+          this.seSelect();
+        }
+        return this.muted;
+      }
+
+      seStep() {
+        this.playTone(135 + Math.random() * 25, 0.04, 'triangle', 0.045, 0, 90);
+      }
+      seSelect() {
+        this.playTone(660, 0.055, 'square', 0.055);
+        this.playTone(880, 0.075, 'square', 0.055, 0.045);
+      }
+      seTalk() {
+        this.playTone(460 + Math.random() * 160, 0.032, 'square', 0.032);
+      }
+      seAttack() {
+        this.playTone(230, 0.11, 'sawtooth', 0.09, 0, 65);
+        this.playTone(150, 0.13, 'square', 0.07, 0.05, 50);
+      }
+      seSpell() {
+        this.playTone(480, 0.12, 'sawtooth', 0.07, 0, 1180);
+        this.playTone(720, 0.16, 'triangle', 0.07, 0.08, 1480);
+      }
+      seHeal() {
+        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((n, i) =>
+          this.playTone(n, 0.14, 'sine', 0.08, i * 0.065)
+        );
+      }
+      seDamage() {
+        this.playTone(145, 0.16, 'sawtooth', 0.095, 0, 58);
+      }
+      seEncounter() {
+        [330, 392, 494, 659].forEach((n, i) =>
+          this.playTone(n, 0.08, 'sawtooth', 0.07, i * 0.055)
+        );
+      }
+      seWarp() {
+        [392, 494, 587, 784, 988, 1175, 1568].forEach((n, i) =>
+          this.playTone(n, 0.18, 'sine', 0.075, i * 0.065, n * 1.12)
+        );
+      }
+      seJoin() {
+        const notes = [523.25, 659.25, 783.99, 1046.5, 987.77, 1046.5];
+        const times = [0, 0.1, 0.2, 0.32, 0.48, 0.6];
+        notes.forEach((n, i) => this.playTone(n, 0.18, 'square', 0.065, times[i]));
+      }
+      seVictory() {
+        const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
+        const times = [0, 0.09, 0.18, 0.29, 0.43, 0.55];
+        notes.forEach((n, i) => this.playTone(n, 0.18, 'triangle', 0.09, times[i]));
+      }
+      seLevelUp() {
+        const notes = [523.25, 523.25, 523.25, 659.25, 783.99, 1046.5];
+        const times = [0, 0.11, 0.22, 0.34, 0.48, 0.64];
+        notes.forEach((n, i) => this.playTone(n, 0.2, 'square', 0.07, times[i]));
+      }
+    }
+    const audio = new RetroSoundEngine();
+
+    // =========================================================================
+    // 2. ペーパークラフト風スプライト生成（全22キャラの手描き風イラスト＋白フチ加工）
+    // =========================================================================
+    const SPRITE_SIZE = 512;
+    const STORAGE_PREFIX = 'diorama_rpg_v2_sprite_';
+
+    function createBaseCanvas(size = SPRITE_SIZE) {
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      return c;
+    }
+
+    function applyPaperCutoutEffect(srcCanvas) {
+      const out = createBaseCanvas();
+      const ctx = out.getContext('2d');
+
+      const mask = createBaseCanvas();
+      const mctx = mask.getContext('2d');
+      mctx.drawImage(srcCanvas, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
+      mctx.globalCompositeOperation = 'source-in';
+      mctx.fillStyle = '#fffdf7';
+      mctx.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+
+      const border = 14;
+      const steps = 16;
+      ctx.save();
+      ctx.shadowColor = 'rgba(15, 15, 25, 0.28)';
+      ctx.shadowBlur = 7;
+      for (let i = 0; i < steps; i++) {
+        const a = (Math.PI * 2 * i) / steps;
+        ctx.drawImage(mask, Math.cos(a) * border, Math.sin(a) * border);
+      }
+      ctx.restore();
+      ctx.drawImage(srcCanvas, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
+      return out;
+    }
+
+    function setOutline(ctx, color = '#3b261d', width = 10) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+    }
+
+    // --- 仲間（2名） ---
+    function drawHeroDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 275); setOutline(ctx);
+      ctx.fillStyle = '#d94848';
+      ctx.beginPath(); ctx.moveTo(-68, -10); ctx.quadraticCurveTo(-110, 85, -80, 155);
+      ctx.lineTo(80, 155); ctx.quadraticCurveTo(110, 85, 68, -10); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#6b4226';
+      ctx.beginPath(); ctx.ellipse(-36, 168, 28, 22, 0, 0, Math.PI * 2); ctx.ellipse(36, 168, 28, 22, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#3ca374';
+      ctx.beginPath(); ctx.moveTo(-58, 10); ctx.lineTo(58, 10); ctx.lineTo(74, 145); ctx.lineTo(-74, 145); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#7c4a2d'; ctx.fillRect(-64, 92, 128, 24); ctx.strokeRect(-64, 92, 128, 24);
+      ctx.fillStyle = '#fbbf24'; ctx.fillRect(-16, 88, 32, 32); ctx.strokeRect(-16, 88, 32, 32);
+      ctx.fillStyle = '#b47b44'; ctx.beginPath(); ctx.ellipse(-82, 75, 36, 46, -0.15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(-82, 75, 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.save(); ctx.translate(92, 60); ctx.rotate(0.28);
+      ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.moveTo(-12, -110); ctx.lineTo(0, -140); ctx.lineTo(12, -110); ctx.lineTo(14, 10); ctx.lineTo(-14, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.fillRect(-26, 6, 52, 16); ctx.strokeRect(-26, 6, 52, 16);
+      ctx.fillStyle = '#7c4a2d'; ctx.fillRect(-9, 22, 18, 30); ctx.strokeRect(-9, 22, 18, 30);
+      ctx.restore();
+      ctx.fillStyle = '#ffe0c2'; ctx.beginPath(); ctx.arc(0, -64, 82, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#784421'; ctx.beginPath(); ctx.arc(0, -76, 84, Math.PI * 0.92, Math.PI * 2.08);
+      ctx.lineTo(64, -55); ctx.lineTo(35, -75); ctx.lineTo(5, -48); ctx.lineTo(-28, -76); ctx.lineTo(-65, -52); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#2563eb'; ctx.beginPath(); ctx.moveTo(-88, -108); ctx.quadraticCurveTo(0, -235, 92, -118); ctx.quadraticCurveTo(0, -82, -88, -108); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.ellipse(0, -108, 90, 20, -0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#2a1810'; ctx.beginPath(); ctx.ellipse(-28, -50, 10, 15, 0, 0, Math.PI * 2); ctx.ellipse(28, -50, 10, 15, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-32, -55, 4, 0, Math.PI * 2); ctx.arc(24, -55, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(244,114,182,0.45)'; ctx.beginPath(); ctx.ellipse(-50, -34, 14, 9, 0, 0, Math.PI * 2); ctx.ellipse(50, -34, 14, 9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, -34, 16, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawLinaDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 285); setOutline(ctx);
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.ellipse(0, -20, 96, 120, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fdf2f8'; ctx.beginPath(); ctx.moveTo(-55, 8); ctx.lineTo(55, 8); ctx.lineTo(88, 165); ctx.lineTo(-88, 165); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f472b6'; ctx.beginPath(); ctx.moveTo(-40, 22); ctx.lineTo(40, 22); ctx.lineTo(54, 150); ctx.lineTo(-54, 150); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#d97706'; ctx.fillRect(72, -60, 16, 220); ctx.strokeRect(72, -60, 16, 220);
+      ctx.fillStyle = '#f472b6'; ctx.beginPath(); ctx.arc(80, -78, 24, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(80, -78, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffe4cc'; ctx.beginPath(); ctx.arc(0, -68, 76, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(0, -78, 78, Math.PI * 0.95, Math.PI * 2.05); ctx.lineTo(52, -58); ctx.lineTo(0, -72); ctx.lineTo(-52, -58); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ec4899'; ctx.beginPath(); ctx.arc(-54, -124, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(-54, -124, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2a1810'; ctx.beginPath(); ctx.ellipse(-26, -54, 10, 14, 0, 0, Math.PI * 2); ctx.ellipse(26, -54, 10, 14, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-29, -59, 4, 0, Math.PI * 2); ctx.arc(23, -59, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(244,114,182,0.5)'; ctx.beginPath(); ctx.ellipse(-46, -38, 13, 8, 0, 0, Math.PI * 2); ctx.ellipse(46, -38, 13, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, -38, 13, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // --- はじまりの島 NPC（5名） ---
+    function drawElderDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 285); setOutline(ctx);
+      ctx.fillStyle = '#7c3aed'; ctx.beginPath(); ctx.moveTo(-64, 0); ctx.lineTo(64, 0); ctx.lineTo(86, 168); ctx.lineTo(-86, 168); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.fillRect(-18, 12, 36, 154); ctx.strokeRect(-18, 12, 36, 154);
+      ctx.fillStyle = '#92400e'; ctx.fillRect(82, -95, 18, 260); ctx.strokeRect(82, -95, 18, 260);
+      ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(91, -108, 24, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fbd3b0'; ctx.beginPath(); ctx.arc(0, -68, 76, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.moveTo(-70, -45); ctx.quadraticCurveTo(-80, 75, 0, 105); ctx.quadraticCurveTo(80, 75, 70, -45); ctx.quadraticCurveTo(0, -25, -70, -45); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(-28, -62, 14, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+      ctx.beginPath(); ctx.arc(28, -62, 14, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+      ctx.fillStyle = '#4c1d95'; ctx.beginPath(); ctx.ellipse(0, -120, 86, 26, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, -125, 62, Math.PI, 0); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawGaldDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 288); setOutline(ctx);
+      ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.roundRect(-84, -8, 168, 166, 36); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#451a03'; ctx.fillRect(-58, 10, 116, 148); ctx.strokeRect(-58, 10, 116, 148);
+      ctx.save(); ctx.translate(106, 20); ctx.rotate(0.22);
+      ctx.fillStyle = '#92400e'; ctx.fillRect(-10, -70, 20, 165); ctx.strokeRect(-10, -70, 20, 165);
+      ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.roundRect(-48, -110, 96, 54, 12); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#f5c29b'; ctx.beginPath(); ctx.arc(0, -64, 74, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath(); ctx.moveTo(-74, -46); ctx.quadraticCurveTo(-86, 60, 0, 86); ctx.quadraticCurveTo(86, 60, 74, -46);
+      ctx.quadraticCurveTo(0, -22, -74, -46); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#dc2626'; ctx.fillRect(-76, -118, 152, 28); ctx.strokeRect(-76, -118, 152, 28);
+      ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(-46, -82); ctx.lineTo(-14, -74); ctx.moveTo(46, -82); ctx.lineTo(14, -74); ctx.stroke();
+      ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(-28, -62, 9, 0, Math.PI * 2); ctx.arc(28, -62, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawMiloDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 285); setOutline(ctx);
+      ctx.fillStyle = '#15803d'; ctx.beginPath(); ctx.moveTo(-64, 0); ctx.lineTo(64, 0); ctx.lineTo(86, 162); ctx.lineTo(-86, 162); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fef3c7'; ctx.fillRect(-24, 10, 48, 130); ctx.strokeRect(-24, 10, 48, 130);
+      ctx.save(); ctx.translate(-68, 72); ctx.rotate(-0.45);
+      ctx.fillStyle = '#92400e'; ctx.fillRect(-10, -115, 20, 95); ctx.strokeRect(-10, -115, 20, 95);
+      ctx.fillStyle = '#d97706'; ctx.beginPath(); ctx.ellipse(0, 12, 46, 56, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#451a03'; ctx.beginPath(); ctx.arc(0, 6, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#ffe0c2'; ctx.beginPath(); ctx.arc(0, -66, 72, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#a16207'; ctx.beginPath(); ctx.arc(0, -76, 74, Math.PI, 0); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.moveTo(-88, -104); ctx.quadraticCurveTo(0, -210, 86, -112); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.moveTo(46, -148); ctx.quadraticCurveTo(108, -210, 94, -124); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.ellipse(-24, -56, 8, 12, 0, 0, Math.PI * 2); ctx.ellipse(24, -56, 8, 12, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, -40, 14, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawBabaDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 290); setOutline(ctx);
+      ctx.fillStyle = '#9a3412'; ctx.beginPath(); ctx.moveTo(-64, 6); ctx.lineTo(64, 6); ctx.lineTo(90, 160); ctx.lineTo(-90, 160); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fffbeb'; ctx.beginPath(); ctx.roundRect(-48, 20, 96, 134, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.roundRect(48, 52, 86, 68, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#22c55e';
+      [[70,46],[90,38],[112,48]].forEach(([x,y])=>{ ctx.beginPath(); ctx.ellipse(x, y, 22, 14, -0.3, 0, Math.PI*2); ctx.fill(); ctx.stroke(); });
+      ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.arc(0, -148, 32, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fde2c8'; ctx.beginPath(); ctx.arc(0, -64, 72, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(0, -76, 74, Math.PI * 0.95, Math.PI * 2.05); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.moveTo(-76, -98); ctx.quadraticCurveTo(0, -155, 76, -98); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.arc(-26, -56, 13, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+      ctx.beginPath(); ctx.arc(26, -56, 13, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+      ctx.fillStyle = 'rgba(244,114,182,0.45)'; ctx.beginPath(); ctx.arc(-44, -40, 11, 0, Math.PI * 2); ctx.arc(44, -40, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, -36, 12, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawPochiDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 325); setOutline(ctx, '#451a03', 10);
+      ctx.fillStyle = '#d97706'; ctx.beginPath(); ctx.arc(98, -22, 34, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.roundRect(-84, -18, 168, 110, 48); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fef3c7'; ctx.beginPath(); ctx.ellipse(0, 45, 58, 38, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.roundRect(-64, 62, 36, 52, 16); ctx.roundRect(28, 62, 36, 52, 16); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ef4444'; ctx.fillRect(-58, -30, 116, 22); ctx.strokeRect(-58, -30, 116, 22);
+      ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.arc(0, -8, 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath(); ctx.moveTo(-64, -120); ctx.lineTo(-86, -196); ctx.lineTo(-18, -148); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(64, -120); ctx.lineTo(86, -196); ctx.lineTo(18, -148); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(0, -96, 80, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fffbeb'; ctx.beginPath(); ctx.ellipse(0, -68, 64, 44, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fffbeb'; ctx.beginPath(); ctx.arc(-26, -118, 10, 0, Math.PI * 2); ctx.arc(26, -118, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(-30, -94, 11, 0, Math.PI * 2); ctx.arc(30, -94, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, -76, 14, 10, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fb7185'; ctx.beginPath(); ctx.ellipse(0, -52, 13, 16, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // --- 砂漠の島 NPC（3名） ---
+    function drawZaidDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 286); setOutline(ctx);
+      ctx.fillStyle = '#6d28d9'; ctx.beginPath(); ctx.moveTo(-68, 0); ctx.lineTo(68, 0); ctx.lineTo(88, 164); ctx.lineTo(-88, 164); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.fillRect(-20, 8, 40, 152); ctx.strokeRect(-20, 8, 40, 152);
+      ctx.fillStyle = '#ea580c'; ctx.beginPath(); ctx.ellipse(84, 78, 40, 48, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#facc15'; ctx.fillRect(62, 22, 44, 18); ctx.strokeRect(62, 22, 44, 18);
+      ctx.fillStyle = '#d99b66'; ctx.beginPath(); ctx.arc(0, -64, 72, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(0, -40, 56, 0.1 * Math.PI, 0.9 * Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.ellipse(0, -126, 88, 52, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, -128, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(-26, -64, 9, 0, Math.PI * 2); ctx.arc(26, -64, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawSophiaDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 286); setOutline(ctx);
+      ctx.fillStyle = '#d6b482'; ctx.beginPath(); ctx.moveTo(-60, 6); ctx.lineTo(60, 6); ctx.lineTo(78, 162); ctx.lineTo(-78, 162); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#78350f'; ctx.fillRect(-62, 86, 124, 22); ctx.strokeRect(-62, 86, 124, 22);
+      ctx.fillStyle = '#78350f'; ctx.fillRect(78, 58, 16, 62); ctx.strokeRect(78, 58, 16, 62);
+      ctx.fillStyle = '#bae6fd'; ctx.beginPath(); ctx.arc(86, 30, 34, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#92400e'; ctx.beginPath(); ctx.arc(0, -56, 82, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffe0c2'; ctx.beginPath(); ctx.arc(0, -64, 70, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e7d3ad'; ctx.beginPath(); ctx.ellipse(0, -112, 92, 22, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, -116, 64, Math.PI, 0); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(-26, -60, 8, 0, Math.PI * 2); ctx.arc(26, -60, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 6; ctx.strokeStyle = '#334155';
+      ctx.beginPath(); ctx.arc(-26, -60, 20, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(26, -60, 20, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-6, -60); ctx.lineTo(6, -60); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawLailaDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 286); setOutline(ctx);
+      ctx.fillStyle = '#f43f5e';
+      ctx.beginPath(); ctx.moveTo(-98, -95); ctx.quadraticCurveTo(-140, 45, -108, 150); ctx.lineTo(108, 150); ctx.quadraticCurveTo(140, 45, 98, -95); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#06b6d4'; ctx.beginPath(); ctx.moveTo(-54, 12); ctx.lineTo(54, 12); ctx.lineTo(86, 162); ctx.lineTo(-86, 162); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#facc15'; ctx.fillRect(-58, 72, 116, 20); ctx.strokeRect(-58, 72, 116, 20);
+      ctx.fillStyle = '#1e1b4b'; ctx.beginPath(); ctx.arc(0, -64, 78, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f3c6a5'; ctx.beginPath(); ctx.arc(0, -64, 68, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.moveTo(-54, -112); ctx.lineTo(0, -148); ctx.lineTo(54, -112); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, -114, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.ellipse(-24, -58, 9, 13, 0, 0, Math.PI * 2); ctx.ellipse(24, -58, 9, 13, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-27, -63, 4, 0, Math.PI * 2); ctx.arc(21, -63, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, -38, 12, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // --- 雪の島 NPC（3名） ---
+    function drawBalkDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 286); setOutline(ctx);
+      ctx.fillStyle = '#e5e7eb'; ctx.beginPath(); ctx.roundRect(-94, -12, 188, 172, 42); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.roundRect(-64, 8, 128, 150, 22); ctx.fill(); ctx.stroke();
+      ctx.save(); ctx.translate(106, 12); ctx.rotate(0.2);
+      ctx.fillStyle = '#78350f'; ctx.fillRect(-10, -85, 20, 195); ctx.strokeRect(-10, -85, 20, 195);
+      ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.moveTo(8, -90); ctx.quadraticCurveTo(68, -65, 58, -16); ctx.lineTo(8, -32); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#f8c8a2'; ctx.beginPath(); ctx.arc(0, -68, 74, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#334155';
+      ctx.beginPath(); ctx.moveTo(-74, -48); ctx.quadraticCurveTo(-82, 54, 0, 82); ctx.quadraticCurveTo(82, 54, 74, -48);
+      ctx.quadraticCurveTo(0, -24, -74, -48); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1d4ed8'; ctx.beginPath(); ctx.arc(0, -104, 76, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(0, -188, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(-26, -68, 9, 0, Math.PI * 2); ctx.arc(26, -68, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawElsaDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 286); setOutline(ctx, '#1e3a8a', 10);
+      ctx.fillStyle = '#1e40af';
+      ctx.beginPath(); ctx.moveTo(-66, -152); ctx.quadraticCurveTo(0, -195, 66, -152);
+      ctx.lineTo(106, 162); ctx.lineTo(-106, 162); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0f2fe'; ctx.beginPath(); ctx.arc(0, -68, 68, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff1e6'; ctx.beginPath(); ctx.arc(0, -64, 58, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#2563eb'; ctx.beginPath(); ctx.ellipse(-22, -62, 9, 13, 0, 0, Math.PI * 2); ctx.ellipse(22, -62, 9, 13, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-25, -67, 4, 0, Math.PI * 2); ctx.arc(19, -67, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(0, 68, 48, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0f2fe'; ctx.beginPath(); ctx.arc(-14, 52, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    function drawPentaDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 310); setOutline(ctx, '#0f172a', 10);
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.ellipse(-44, 138, 36, 18, 0, 0, Math.PI * 2); ctx.ellipse(44, 138, 36, 18, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.ellipse(-108, 12, 34, 68, 0.35, 0, Math.PI * 2); ctx.ellipse(108, 12, 34, 68, -0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.ellipse(0, 0, 98, 134, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.ellipse(0, 26, 70, 96, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.roundRect(-84, -36, 168, 32, 14); ctx.fill(); ctx.stroke();
+      ctx.fillRect(34, -8, 30, 62); ctx.strokeRect(34, -8, 30, 62);
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(-32, -68, 16, 0, Math.PI * 2); ctx.arc(32, -68, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(-30, -68, 9, 0, Math.PI * 2); ctx.arc(30, -68, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.moveTo(-24, -52); ctx.lineTo(24, -52); ctx.lineTo(0, -24); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // --- モンスター＆ボス（9種） ---
+    // 1. みずスライム
+    function drawSlimeDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 310); setOutline(ctx, '#1e3a8a', 11);
+      const grad = ctx.createRadialGradient(-40, -60, 20, 0, 0, 175);
+      grad.addColorStop(0, '#7dd3fc'); grad.addColorStop(0.55, '#38bdf8'); grad.addColorStop(1, '#0284c7');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.moveTo(0, -175);
+      ctx.bezierCurveTo(45, -100, 155, -35, 155, 60);
+      ctx.bezierCurveTo(155, 140, 85, 150, 0, 150);
+      ctx.bezierCurveTo(-85, 150, -155, 140, -155, 60);
+      ctx.bezierCurveTo(-155, -35, -45, -100, 0, -175);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.ellipse(-56, -28, 22, 38, 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-44, 30, 26, 0, Math.PI * 2); ctx.arc(44, 30, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(-40, 32, 13, 0, Math.PI * 2); ctx.arc(40, 32, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 12; ctx.beginPath(); ctx.arc(0, 62, 52, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 2. おこりマッシュ
+    function drawMushroomDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 305); setOutline(ctx, '#451a03', 11);
+      ctx.fillStyle = '#fef3c7'; ctx.beginPath(); ctx.roundRect(-72, -10, 144, 155, 48); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.ellipse(0, -45, 165, 115, 0, Math.PI, 0, false);
+      ctx.quadraticCurveTo(165, 10, 0, 15); ctx.quadraticCurveTo(-165, 10, -165, -45); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fffbeb';
+      [[-80,-75,28],[0,-115,32],[82,-70,26],[-32,-40,18],[48,-32,18]].forEach(([x,y,r])=>{ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); ctx.stroke(); });
+      ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(-32, 62, 15, 0, Math.PI * 2); ctx.arc(32, 62, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-36, 56, 5, 0, Math.PI * 2); ctx.arc(28, 56, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(-22, 102); ctx.quadraticCurveTo(0, 88, 22, 102); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 3. 石版の番人（緑の島ボス）
+    function drawBossGreenDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 275); setOutline(ctx, '#1e293b', 12);
+      ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.roundRect(-185, -35, 76, 175, 28); ctx.roundRect(109, -35, 76, 175, 28); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.moveTo(-125, -80); ctx.lineTo(125, -80); ctx.lineTo(95, 165); ctx.lineTo(-95, 165); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(42, 30); ctx.lineTo(0, 90); ctx.lineTo(-42, 30); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.roundRect(-86, -185, 172, 120, 26); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath(); ctx.moveTo(-86,-155); ctx.lineTo(-142,-210); ctx.lineTo(-60,-185); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(86,-155); ctx.lineTo(142,-210); ctx.lineTo(60,-185); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1e293b'; ctx.fillRect(-62, -142, 124, 38);
+      ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.ellipse(-28, -123, 18, 12, 0.2, 0, Math.PI * 2); ctx.ellipse(28, -123, 18, 12, -0.2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 4. サボテン坊や（サボテンダー風・砂漠の島）
+    function drawCactusDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 290); setOutline(ctx, '#14532d', 11);
+      // 走るポーズの足
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath(); ctx.roundRect(-66, 76, 44, 88, 22); ctx.fill(); ctx.stroke();
+      ctx.save(); ctx.translate(44, 102); ctx.rotate(-0.65);
+      ctx.beginPath(); ctx.roundRect(-22, -18, 44, 92, 22); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      // 特徴的なサボテン腕
+      ctx.beginPath(); ctx.roundRect(-142, -52, 92, 42, 20); ctx.roundRect(-142, -112, 42, 85, 20); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.roundRect(50, -32, 92, 42, 20); ctx.roundRect(100, -32, 42, 88, 20); ctx.fill(); ctx.stroke();
+      // 胴体
+      ctx.beginPath(); ctx.roundRect(-58, -148, 116, 250, 56); ctx.fill(); ctx.stroke();
+      // 頭の花＆トゲ
+      ctx.fillStyle = '#f43f5e'; ctx.beginPath(); ctx.arc(0, -165, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(0, -165, 9, 0, Math.PI * 2); ctx.fill();
+      // ポカンとした可愛い顔
+      ctx.fillStyle = '#052e16';
+      ctx.beginPath(); ctx.ellipse(-22, -76, 12, 18, 0, 0, Math.PI * 2); ctx.ellipse(22, -76, 12, 18, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, -30, 15, 22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 5. さそりアーマー（砂漠の島）
+    function drawScorpionDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 295); setOutline(ctx, '#450a0a', 11);
+      ctx.fillStyle = '#b91c1c'; ctx.beginPath(); ctx.arc(0, -135, 36, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.moveTo(0, -210); ctx.lineTo(26, -150); ctx.lineTo(-26, -150); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.ellipse(-135, 20, 48, 66, -0.35, 0, Math.PI * 2); ctx.ellipse(135, 20, 48, 66, 0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#991b1b'; ctx.beginPath(); ctx.ellipse(0, 40, 105, 92, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.ellipse(0, 15, 76, 22, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.ellipse(-36, 48, 20, 14, 0.25, 0, Math.PI * 2); ctx.ellipse(36, 48, 20, 14, -0.25, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(-34, 48, 7, 0, Math.PI * 2); ctx.arc(34, 48, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 6. 砂漠のスフィンクス（砂漠の島ボス）
+    function drawBossDesertDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 285); setOutline(ctx, '#451a03', 11);
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath(); ctx.moveTo(-60, -20); ctx.lineTo(-195, -110); ctx.lineTo(-165, 55); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(60, -20); ctx.lineTo(195, -110); ctx.lineTo(165, 55); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.roundRect(-105, 10, 210, 145, 42); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1d4ed8'; ctx.beginPath(); ctx.moveTo(-120, 15); ctx.lineTo(-95, -155); ctx.lineTo(95, -155); ctx.lineTo(120, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-102, -105, 204, 24); ctx.strokeRect(-102, -105, 204, 24);
+      ctx.fillRect(-110, -45, 220, 24); ctx.strokeRect(-110, -45, 220, 24);
+      ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, -68, 70, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, -142, 22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.ellipse(-26, -72, 14, 10, 0, 0, Math.PI * 2); ctx.ellipse(26, -72, 14, 10, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(-26, -72, 6, 0, Math.PI * 2); ctx.arc(26, -72, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 7. ユキだるま（雪の島）
+    function drawSnowmanDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 295); setOutline(ctx, '#1e3a8a', 10);
+      ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(0, 68, 104, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.roundRect(-84, -22, 168, 36, 16); ctx.fill(); ctx.stroke();
+      ctx.fillRect(36, 6, 36, 80); ctx.strokeRect(36, 6, 36, 80);
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, -72, 78, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#2563eb'; ctx.beginPath(); ctx.moveTo(-58, -132); ctx.lineTo(-42, -208); ctx.lineTo(42, -208); ctx.lineTo(58, -132); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(-26, -82, 11, 0, Math.PI * 2); ctx.arc(26, -82, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.moveTo(0, -72); ctx.lineTo(54, -56); ctx.lineTo(0, -48); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 8. 雪山のイエティ（イエティ風・雪の島）
+    function drawYetiDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 285); setOutline(ctx, '#1e3a8a', 11);
+      // もふもふの大きな腕
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath(); ctx.roundRect(-176, -32, 74, 152, 34); ctx.roundRect(102, -32, 74, 152, 34); ctx.fill(); ctx.stroke();
+      // 白いもふもふの体
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath(); ctx.ellipse(0, 20, 126, 148, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 水色のツノ
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.moveTo(-64, -108); ctx.lineTo(-104, -182); ctx.lineTo(-26, -132); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(64, -108); ctx.lineTo(104, -182); ctx.lineTo(26, -132); ctx.closePath(); ctx.fill(); ctx.stroke();
+      // 青い顔と牙
+      ctx.fillStyle = '#93c5fd';
+      ctx.beginPath(); ctx.ellipse(0, -56, 78, 62, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath(); ctx.arc(-28, -66, 12, 0, Math.PI * 2); ctx.arc(28, -66, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(-34, -32); ctx.lineTo(-22, -10); ctx.lineTo(-12, -32); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(34, -32); ctx.lineTo(22, -10); ctx.lineTo(12, -32); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 9. 氷竜フロスト（雪の島ボス）
+    function drawBossSnowDefault() {
+      const c = createBaseCanvas(), ctx = c.getContext('2d');
+      ctx.save(); ctx.translate(256, 280); setOutline(ctx, '#0c4a6e', 11);
+      // 氷の大きな翼
+      ctx.fillStyle = '#7dd3fc';
+      ctx.beginPath(); ctx.moveTo(-40, -15); ctx.lineTo(-200, -145); ctx.lineTo(-185, 30); ctx.lineTo(-95, 70); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(40, -15); ctx.lineTo(200, -145); ctx.lineTo(185, 30); ctx.lineTo(95, 70); ctx.closePath(); ctx.fill(); ctx.stroke();
+      // 竜の胴体と白いお腹
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath(); ctx.ellipse(0, 58, 92, 108, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath(); ctx.ellipse(0, 72, 56, 76, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 氷のツノ＆竜の頭
+      ctx.fillStyle = '#bae6fd';
+      ctx.beginPath(); ctx.moveTo(-46, -105); ctx.lineTo(-98, -205); ctx.lineTo(-14, -125); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(46, -105); ctx.lineTo(98, -205); ctx.lineTo(14, -125); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.ellipse(0, -68, 84, 68, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 鋭く光る黄金の目と牙
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath(); ctx.ellipse(-30, -76, 18, 12, 0.25, 0, Math.PI * 2); ctx.ellipse(30, -76, 18, 12, -0.25, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(-28, -76, 6, 0, Math.PI * 2); ctx.arc(28, -76, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(-36, -30); ctx.lineTo(-24, -6); ctx.lineTo(-12, -30); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(36, -30); ctx.lineTo(24, -6); ctx.lineTo(12, -30); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      return applyPaperCutoutEffect(c);
+    }
+
+    // 白背景の自動透過（四隅フラッドフィル）＋白いペーパークラフト風フチ取り
+    function removeWhiteBackgroundAndCutout(img) {
+      const work = createBaseCanvas();
+      const ctx = work.getContext('2d');
+      const pad = 28;
+      const maxDim = SPRITE_SIZE - pad * 2;
+      const scale = Math.min(maxDim / img.width, maxDim / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      ctx.drawImage(img, (SPRITE_SIZE - dw) / 2, (SPRITE_SIZE - dh) / 2, dw, dh);
+
+      const imgData = ctx.getImageData(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+      const data = imgData.data;
+      const w = SPRITE_SIZE, h = SPRITE_SIZE;
+      const cornerIdx = (pad * w + pad) * 4;
+      const bgR = data[cornerIdx], bgG = data[cornerIdx + 1], bgB = data[cornerIdx + 2], bgA = data[cornerIdx + 3];
+
+      // すでに透過画像でなければ四隅から白・明るい背景色を透過
+      if (bgA > 200 && bgR > 210 && bgG > 210 && bgB > 210) {
+        const visited = new Uint8Array(w * h);
+        const queue = [];
+        const isBg = (idx) => {
+          const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+          if (a < 20) return true;
+          return Math.abs(r - bgR) < 42 && Math.abs(g - bgG) < 42 && Math.abs(b - bgB) < 42;
+        };
+        for (let x = 0; x < w; x++) queue.push(x, (h - 1) * w + x);
+        for (let y = 1; y < h - 1; y++) queue.push(y * w, y * w + (w - 1));
+        let head = 0;
+        while (head < queue.length) {
+          const pos = queue[head++];
+          if (visited[pos]) continue;
+          visited[pos] = 1;
+          const idx = pos * 4;
+          if (!isBg(idx)) continue;
+          data[idx + 3] = 0;
+          const x = pos % w, y = (pos - x) / w;
+          if (x > 0 && !visited[pos - 1]) queue.push(pos - 1);
+          if (x < w - 1 && !visited[pos + 1]) queue.push(pos + 1);
+          if (y > 0 && !visited[pos - w]) queue.push(pos - w);
+          if (y < h - 1 && !visited[pos + w]) queue.push(pos + w);
+        }
+        ctx.putImageData(imgData, 0, 0);
+      }
+      return applyPaperCutoutEffect(work);
+    }
+
+    // 5カテゴリ・全22キャラクター登録表
+    const STUDIO_CATEGORIES = [
+      { id: 'party', label: '⚔️ 仲間' },
+      { id: 'green', label: '🌿 はじまりの島' },
+      { id: 'desert', label: '🏜️ 砂漠の島' },
+      { id: 'snow', label: '❄️ 雪の島' },
+      { id: 'monster', label: '👾 モンスター' }
+    ];
+
+    const CHAR_REGISTRY = {
+      // 仲間（2名）
+      hero: { id: 'hero', category: 'party', label: '勇者アルト', fullName: '主人公アルト', drawDefault: drawHeroDefault, texture: null, dataUrl: '', isCustom: false },
+      lina: { id: 'lina', category: 'party', label: '少女リナ', fullName: '仲間・少女リナ', drawDefault: drawLinaDefault, texture: null, dataUrl: '', isCustom: false },
+      // はじまりの島 NPC（5名）
+      elder: { id: 'elder', category: 'green', label: '村長', fullName: 'はじまりの村・村長', drawDefault: drawElderDefault, texture: null, dataUrl: '', isCustom: false },
+      gald: { id: 'gald', category: 'green', label: '鍛冶屋ガルド', fullName: '鍛冶屋ガルド', drawDefault: drawGaldDefault, texture: null, dataUrl: '', isCustom: false },
+      milo: { id: 'milo', category: 'green', label: '吟遊詩人ミロ', fullName: '吟遊詩人ミロ', drawDefault: drawMiloDefault, texture: null, dataUrl: '', isCustom: false },
+      baba: { id: 'baba', category: 'green', label: '薬草ババ様', fullName: '薬草売りのババ様', drawDefault: drawBabaDefault, texture: null, dataUrl: '', isCustom: false },
+      pochi: { id: 'pochi', category: 'green', label: 'わんこポチ', fullName: '村のわんこ・ポチ', drawDefault: drawPochiDefault, texture: null, dataUrl: '', isCustom: false },
+      // 砂漠の島 NPC（3名）
+      zaid: { id: 'zaid', category: 'desert', label: '商人ザイド', fullName: '砂漠の商人ザイド', drawDefault: drawZaidDefault, texture: null, dataUrl: '', isCustom: false },
+      sophia: { id: 'sophia', category: 'desert', label: '考古学ソフィア', fullName: '考古学者ソフィア', drawDefault: drawSophiaDefault, texture: null, dataUrl: '', isCustom: false },
+      laila: { id: 'laila', category: 'desert', label: '踊り子ライラ', fullName: 'オアシスの踊り子ライラ', drawDefault: drawLailaDefault, texture: null, dataUrl: '', isCustom: false },
+      // 雪の島 NPC（3名）
+      balk: { id: 'balk', category: 'snow', label: '木こりバルク', fullName: '雪山の木こりバルク', drawDefault: drawBalkDefault, texture: null, dataUrl: '', isCustom: false },
+      elsa: { id: 'elsa', category: 'snow', label: '占い師エルザ', fullName: '氷の占い師エルザ', drawDefault: drawElsaDefault, texture: null, dataUrl: '', isCustom: false },
+      penta: { id: 'penta', category: 'snow', label: 'ペン太', fullName: 'ペンギンのペン太', drawDefault: drawPentaDefault, texture: null, dataUrl: '', isCustom: false },
+      // モンスター＆ボス（9種）
+      slime: { id: 'slime', category: 'monster', label: 'みずスライム', fullName: 'みずスライム', drawDefault: drawSlimeDefault, texture: null, dataUrl: '', isCustom: false },
+      mushroom: { id: 'mushroom', category: 'monster', label: 'マッシュ', fullName: 'おこりマッシュ', drawDefault: drawMushroomDefault, texture: null, dataUrl: '', isCustom: false },
+      boss_green: { id: 'boss_green', category: 'monster', label: '石版の番人', fullName: 'ボス・石版の番人', drawDefault: drawBossGreenDefault, texture: null, dataUrl: '', isCustom: false },
+      cactus: { id: 'cactus', category: 'monster', label: 'サボテン坊や', fullName: 'サボテン坊や', drawDefault: drawCactusDefault, texture: null, dataUrl: '', isCustom: false },
+      scorpion: { id: 'scorpion', category: 'monster', label: 'さそりアーマー', fullName: 'さそりアーマー', drawDefault: drawScorpionDefault, texture: null, dataUrl: '', isCustom: false },
+      boss_desert: { id: 'boss_desert', category: 'monster', label: 'スフィンクス', fullName: 'ボス・砂漠のスフィンクス', drawDefault: drawBossDesertDefault, texture: null, dataUrl: '', isCustom: false },
+      snowman: { id: 'snowman', category: 'monster', label: 'ユキだるま', fullName: 'ユキだるま', drawDefault: drawSnowmanDefault, texture: null, dataUrl: '', isCustom: false },
+      yeti: { id: 'yeti', category: 'monster', label: 'イエティ', fullName: '雪山のイエティ', drawDefault: drawYetiDefault, texture: null, dataUrl: '', isCustom: false },
+      boss_snow: { id: 'boss_snow', category: 'monster', label: '氷竜フロスト', fullName: 'ボス・氷竜フロスト', drawDefault: drawBossSnowDefault, texture: null, dataUrl: '', isCustom: false }
+    };
+
+    function updateCharTextureFromCanvas(charId, canvas, isCustom = false) {
+      const entry = CHAR_REGISTRY[charId];
+      if (!entry) return;
+      if (!entry.texture) {
+        entry.texture = new THREE.CanvasTexture(canvas);
+        entry.texture.encoding = THREE.sRGBEncoding;
+      } else {
+        entry.texture.image = canvas;
+        entry.texture.needsUpdate = true;
+      }
+      entry.dataUrl = canvas.toDataURL('image/png');
+      entry.isCustom = isCustom;
+    }
+
+    // localStorageへ安全に保存（256pxに縮小して容量節約・超過時は安全に無視）
+    function saveCustomSpriteToStorage(charId, canvas) {
+      try {
+        const small = createBaseCanvas(256);
+        small.getContext('2d').drawImage(canvas, 0, 0, 256, 256);
+        localStorage.setItem(STORAGE_PREFIX + charId, small.toDataURL('image/png'));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function removeCustomSpriteFromStorage(charId) {
+      try {
+        localStorage.removeItem(STORAGE_PREFIX + charId);
+      } catch (e) {
+        // 無視
+      }
+    }
+
+    function initDefaultTextures() {
+      Object.keys(CHAR_REGISTRY).forEach((id) => {
+        updateCharTextureFromCanvas(id, CHAR_REGISTRY[id].drawDefault(), false);
+        // 保存済みのカスタム画像があれば非同期で復元
+        try {
+          const saved = localStorage.getItem(STORAGE_PREFIX + id);
+          if (saved) {
+            const img = new Image();
+            img.onload = () => {
+              const c = createBaseCanvas();
+              c.getContext('2d').drawImage(img, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
+              updateCharTextureFromCanvas(id, c, true);
+              if (selectedStudioChar === id) {
+                const prev = document.getElementById('studio-preview');
+                if (prev) prev.src = CHAR_REGISTRY[id].dataUrl;
+              }
+            };
+            img.src = saved;
+          }
+        } catch (e) {
+          // localStorage利用不可環境でも無視
+        }
+      });
+    }
+
+    // =========================================================================
+    // 3. 3つの島データ＆地形高さ関数
+    // =========================================================================
+    const ISLAND_RADIUS = 20.5;
+
+    function smoothstep(edge0, edge1, x) {
+      const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+      return t * t * (3 - 2 * t);
+    }
+
+    const ISLAND_DEFS = {
+      green: {
+        id: 'green',
+        name: 'はじまりの島',
+        plateText: 'ISLAND I  -  はじまりの島',
+        icon: '🌿',
+        desc: '緑の村と草原、北の丘に石版の神殿がある島',
+        spawn: { x: 0, z: 7.5 },
+        tabletPos: { x: 0, z: -13.7 },
+        waterColor: 0x38bdf8,
+        getHeight(x, z) {
+          let h = 0;
+          const dTemple = Math.hypot(x, z + 12.5);
+          h = Math.max(h, (1 - smoothstep(5.4, 8.6, dTemple)) * 2.2);
+          if (Math.abs(x) < 2.6 && z < -3.2 && z > -8.2) {
+            const ramp = smoothstep(-3.4, -7.2, z) * 2.2;
+            h = Math.max(h, ramp * (1 - smoothstep(1.8, 2.6, Math.abs(x))));
+          }
+          const dMeadow = Math.hypot(x - 10.5, z - 2.5);
+          h = Math.max(h, (1 - smoothstep(4.2, 6.2, dMeadow)) * 0.85);
+          const dC = Math.hypot(x, z);
+          if (dC > 17.5) h -= smoothstep(17.5, 21.5, dC) * 0.5;
+          return h;
+        }
+      },
+      desert: {
+        id: 'desert',
+        name: '砂漠の島',
+        plateText: 'ISLAND II  -  砂漠の島',
+        icon: '🏜️',
+        desc: '黄金の砂丘とオアシス、ピラミッド遺跡が眠る島',
+        spawn: { x: 0, z: 9.5 },
+        tabletPos: { x: 0, z: -13.5 },
+        waterColor: 0x0ea5e9,
+        getHeight(x, z) {
+          let h = (Math.sin(x * 0.22) * Math.cos(z * 0.18) + 1) * 0.55;
+          const dOasis = Math.hypot(x - 8.2, z - 6.8);
+          h *= smoothstep(2.5, 6.0, dOasis);
+          const dTab = Math.hypot(x, z + 13.0);
+          h = Math.max(h, (1 - smoothstep(4.0, 7.2, dTab)) * 1.4);
+          const dC = Math.hypot(x, z);
+          if (dC > 17.5) h -= smoothstep(17.5, 21.5, dC) * 0.5;
+          return h;
+        }
+      },
+      snow: {
+        id: 'snow',
+        name: '雪の島',
+        plateText: 'ISLAND III  -  雪の島',
+        icon: '❄️',
+        desc: '凍った池と暖かい焚き火、氷竜が棲む雪原の島',
+        spawn: { x: 0, z: 9.2 },
+        tabletPos: { x: 0, z: -13.5 },
+        waterColor: 0x1e3a8a,
+        getHeight(x, z) {
+          let h = 0.25 + Math.cos(x * 0.16) * Math.sin(z * 0.16) * 0.25;
+          const dLake = Math.hypot(x - 7.8, z - 2.2);
+          if (dLake < 5.5) h *= smoothstep(3.8, 5.5, dLake);
+          const dTab = Math.hypot(x, z + 13.0);
+          h = Math.max(h, (1 - smoothstep(4.2, 7.5, dTab)) * 1.8);
+          const dC = Math.hypot(x, z);
+          if (dC > 17.5) h -= smoothstep(17.5, 21.5, dC) * 0.5;
+          return h;
+        }
+      }
+    };
+
+    // =========================================================================
+    // 4. ゲーム状態・Three.jsグローバル変数
+    // =========================================================================
+    let scene, camera, renderer;
+    let sunLight, hemiLight, ambientLight;
+    let worldGroup = null;
+    let waterMesh = null, tabletCrystal = null, cloudGroup = null, snowPoints = null, warpParticles = null;
+    let lampLights = [];
+    let campfireFlames = [];
+    let obstacles = [];
+
+    let lightingMode = 'day'; // 'day' | 'evening' | 'night'
+    let cameraAngle = 0;
+    let targetCameraAngle = 0;
+    const cameraLookAtCurrent = new THREE.Vector3(0, 1, 6);
+
+    const STATE = {
+      mode: 'explore', // 'explore' | 'dialog' | 'battle' | 'modal'
+      currentIsland: 'green',
+      player: {
+        lv: 1,
+        hp: 34,
+        maxHp: 34,
+        mp: 14,
+        maxMp: 14,
+        atk: 10,
+        def: 0,
+        exp: 0,
+        nextExp: 20,
+        gold: 0,
+        herbs: 3
+      },
+      lina: {
+        joined: false,
+        hp: 26,
+        maxHp: 26,
+        mp: 18,
+        maxMp: 18
+      },
+      npcFlags: {
+        galdForged: false,
+        zaidSpiced: false,
+        balkCloaked: false
+      },
+      bossDefeated: {
+        green: false,
+        desert: false,
+        snow: false
+      },
+      allClearedShown: false,
+      battle: {
+        enemyObj: null,
+        enemyHp: 0,
+        enemyMaxHp: 0,
+        busy: false
+      }
+    };
+
+    let playerActor = null;
+    let linaFollower = null;
+    const playerTrail = [];
+    let stepSoundCooldown = 0;
+
+    let npcActors = [];
+    let npcBehaviors = [];
+    let monsterActors = [];
+    let interactables = [];
+    let exclaimSprite = null;
+
+    function getTerrainHeight(x, z) {
+      return ISLAND_DEFS[STATE.currentIsland].getHeight(x, z);
+    }
+
+    function canWalkTo(nx, nz) {
+      if (Math.hypot(nx, nz) > ISLAND_RADIUS - 1.35) return false;
+      for (const ob of obstacles) {
+        if (Math.hypot(nx - ob.x, nz - ob.z) < ob.r + 0.55) return false;
+      }
+      return true;
+    }
+
+    // =========================================================================
+    // 5. ペーパークラフト板キャラクタークラス＆アイコン吹き出し
+    // =========================================================================
+    class PaperCharacter {
+      constructor({ charId, x, z, width = 1.9, height = 2.1, name = '', type = 'npc', parent = scene }) {
+        this.charId = charId;
+        this.name = name;
+        this.type = type;
+        this.facing = 1;
+        this.currentScaleX = 1;
+        this.walkPhase = Math.random() * Math.PI * 2;
+        this.isMoving = false;
+        this.hitFlash = 0;
+        this.lungeOffset = new THREE.Vector3();
+        this.shakeTimer = 0;
+
+        this.group = new THREE.Group();
+        this.group.position.set(x, getTerrainHeight(x, z), z);
+
+        const shadowGeo = new THREE.CircleGeometry(width * 0.36, 20);
+        const shadowMat = new THREE.MeshBasicMaterial({
+          color: 0x0f172a,
+          transparent: true,
+          opacity: 0.34,
+          depthWrite: false
+        });
+        this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        this.shadow.rotation.x = -Math.PI / 2;
+        this.shadow.position.y = 0.04;
+        this.group.add(this.shadow);
+
+        const planeGeo = new THREE.PlaneGeometry(width, height);
+        planeGeo.translate(0, height / 2, 0);
+        this.material = new THREE.MeshStandardMaterial({
+          map: CHAR_REGISTRY[charId].texture,
+          transparent: true,
+          alphaTest: 0.12,
+          side: THREE.DoubleSide,
+          roughness: 0.85,
+          metalness: 0.02
+        });
+        this.mesh = new THREE.Mesh(planeGeo, this.material);
+        this.mesh.castShadow = true;
+        this.mesh.position.y = 0.03;
+
+        this.billboardPivot = new THREE.Group();
+        this.billboardPivot.add(this.mesh);
+        this.group.add(this.billboardPivot);
+        parent.add(this.group);
+      }
+
+      update(dt, camPos) {
+        const dx = camPos.x - this.group.position.x;
+        const dz = camPos.z - this.group.position.z;
+        this.billboardPivot.rotation.y = Math.atan2(dx, dz);
+
+        this.currentScaleX += (this.facing - this.currentScaleX) * Math.min(1, dt * 15);
+        this.mesh.scale.x = Math.abs(this.currentScaleX) < 0.05 ? 0.05 : this.currentScaleX;
+
+        if (this.isMoving) {
+          this.walkPhase += dt * 13.5;
+          this.mesh.position.y = 0.03 + Math.abs(Math.sin(this.walkPhase)) * 0.25;
+          this.mesh.rotation.z = Math.sin(this.walkPhase) * 0.11;
+        } else {
+          this.walkPhase += dt * 2.5;
+          this.mesh.position.y = 0.03 + Math.sin(this.walkPhase) * 0.03;
+          this.mesh.rotation.z *= Math.max(0, 1 - dt * 10);
+        }
+
+        let shakeX = 0;
+        if (this.shakeTimer > 0) {
+          this.shakeTimer = Math.max(0, this.shakeTimer - dt);
+          shakeX = Math.sin(this.shakeTimer * 55) * 0.22;
+        }
+        this.billboardPivot.position.set(
+          this.lungeOffset.x + shakeX,
+          this.lungeOffset.y,
+          this.lungeOffset.z
+        );
+
+        if (this.hitFlash > 0) {
+          this.hitFlash = Math.max(0, this.hitFlash - dt * 4);
+          this.material.emissive.setRGB(this.hitFlash, this.hitFlash, this.hitFlash);
+        } else {
+          this.material.emissive.setRGB(0, 0, 0);
+        }
+      }
+    }
+
+    function createExclaimSprite() {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fef08a'; ctx.strokeStyle = '#78350f'; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.arc(64, 60, 44, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#b91c1c'; ctx.font = '800 66px "M PLUS Rounded 1c", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', 64, 62);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+      sp.scale.set(0.95, 0.95, 1);
+      sp.visible = false;
+      scene.add(sp);
+      return sp;
+    }
+
+    function addNpcBadge(actor, emoji, bgColor = '#fffbeb') {
+      const c = document.createElement('canvas');
+      c.width = 96; c.height = 96;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = bgColor;
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.arc(48, 44, 34, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(38, 74); ctx.lineTo(48, 88); ctx.lineTo(58, 74); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.font = '40px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(emoji, 48, 46);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+      sp.scale.set(0.76, 0.76, 1);
+      sp.position.set(0, 2.55, 0);
+      actor.group.add(sp);
+      return sp;
+    }
+
+    function registerIslandNpc({ charId, x, z, width = 1.85, height = 2.05, name, badge = '💬', badgeBg = '#fffbeb', behavior = 'idle', wanderRadius = 2.6, onInteract }) {
+      const actor = new PaperCharacter({ charId, x, z, width, height, name, type: 'npc', parent: worldGroup });
+      const badgeSprite = addNpcBadge(actor, badge, badgeBg);
+      npcActors.push(actor);
+      npcBehaviors.push({
+        actor,
+        badgeSprite,
+        mode: behavior,
+        homeX: x,
+        homeZ: z,
+        radius: wanderRadius,
+        angle: Math.random() * Math.PI * 2,
+        timer: 1 + Math.random() * 2,
+        phase: Math.random() * Math.PI * 2
+      });
+      const interactObj = {
+        type: 'npc',
+        actor,
+        pos: actor.group.position,
+        radius: 2.65,
+        onInteract
+      };
+      interactables.push(interactObj);
+      return { actor, interactObj };
+    }
+
+    function createBrassPlateTexture(text) {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 110;
+      const ctx = c.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 512, 110);
+      grad.addColorStop(0, '#d4af37');
+      grad.addColorStop(0.5, '#f8e48e');
+      grad.addColorStop(1, '#a67c00');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 110);
+      ctx.strokeStyle = '#5c4000';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(8, 8, 496, 94);
+      ctx.fillStyle = '#5c4000';
+      [[26, 26], [486, 26], [26, 84], [486, 84]].forEach(([rx, ry]) => {
+        ctx.beginPath(); ctx.arc(rx, ry, 6, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.fillStyle = '#2d1c00';
+      ctx.font = '800 32px "M PLUS Rounded 1c", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 256, 56);
+      const tex = new THREE.CanvasTexture(c);
+      tex.encoding = THREE.sRGBEncoding;
+      return tex;
+    }
+
+    // =========================================================================
+    // 6. 3つのジオラマ箱庭ワールド構築＆切り替え
+    // =========================================================================
+    function buildIslandWorld(islandId) {
+      STATE.currentIsland = islandId;
+      const def = ISLAND_DEFS[islandId];
+
+      if (worldGroup) scene.remove(worldGroup);
+      worldGroup = new THREE.Group();
+      scene.add(worldGroup);
+
+      obstacles = [];
+      lampLights = [];
+      campfireFlames = [];
+      npcActors = [];
+      npcBehaviors = [];
+      monsterActors = [];
+      interactables = [];
+      snowPoints = null;
+
+      // 1. 木製ジオラマ台座＋真鍮プレート風ラベル
+      const woodBaseMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.72 });
+      const woodTrimMat = new THREE.MeshStandardMaterial({ color: 0x3b2210, roughness: 0.62 });
+      const baseCylinder = new THREE.Mesh(new THREE.CylinderGeometry(24.5, 25.5, 3.2, 48), woodBaseMat);
+      baseCylinder.position.y = -2.7;
+      baseCylinder.receiveShadow = true;
+      worldGroup.add(baseCylinder);
+
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(24.5, 0.45, 12, 64), woodTrimMat);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = -1.1;
+      worldGroup.add(rim);
+
+      const plateMat = new THREE.MeshStandardMaterial({
+        map: createBrassPlateTexture(def.plateText),
+        roughness: 0.35,
+        metalness: 0.55
+      });
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(8.5, 1.8, 0.25), plateMat);
+      plate.position.set(0, -2.55, 24.95);
+      worldGroup.add(plate);
+
+      // 2. 海
+      const waterMat = new THREE.MeshStandardMaterial({
+        color: def.waterColor,
+        roughness: 0.22,
+        metalness: 0.12,
+        transparent: true,
+        opacity: 0.88
+      });
+      waterMesh = new THREE.Mesh(new THREE.CylinderGeometry(24.0, 24.0, 0.6, 48), waterMat);
+      waterMesh.position.y = -1.05;
+      waterMesh.receiveShadow = true;
+      worldGroup.add(waterMesh);
+
+      // 3. 島の地面メッシュ
+      const groundGeo = new THREE.RingGeometry(0, ISLAND_RADIUS, 56, 32);
+      groundGeo.rotateX(-Math.PI / 2);
+      const posAttr = groundGeo.attributes.position;
+      const colors = [];
+
+      for (let i = 0; i < posAttr.count; i++) {
+        const vx = posAttr.getX(i), vz = posAttr.getZ(i);
+        const dist = Math.hypot(vx, vz);
+        posAttr.setY(i, def.getHeight(vx, vz));
+        const col = new THREE.Color();
+        if (islandId === 'green') {
+          if (dist > 18.2) col.setHex(0xe6d3a3);
+          else if (Math.hypot(vx, vz + 12.5) < 6.4) col.setHex(0x9ca3af);
+          else if (vx > 4 && vz > -6) col.setHex(0x88cc5e);
+          else col.setHex(0x6dbb58);
+        } else if (islandId === 'desert') {
+          if (Math.hypot(vx - 8.2, vz - 6.8) < 4.5) col.setHex(0x65a30d);
+          else if (dist > 18.2) col.setHex(0xd9b372);
+          else col.setHex(0xf3c978);
+        } else {
+          if (Math.hypot(vx - 7.8, vz - 2.2) < 4.3) col.setHex(0x93c5fd);
+          else col.setHex(0xf1f5f9);
+        }
+        col.offsetHSL(0, 0, Math.sin(vx * 0.5) * Math.cos(vz * 0.5) * 0.025);
+        colors.push(col.r, col.g, col.b);
+      }
+      groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      groundGeo.computeVertexNormals();
+      const groundMesh = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+      groundMesh.receiveShadow = true;
+      groundMesh.castShadow = true;
+      worldGroup.add(groundMesh);
+
+      const cliffGeo = new THREE.CylinderGeometry(ISLAND_RADIUS, ISLAND_RADIUS + 0.9, 1.8, 56, 1, true);
+      const cliffVertices = cliffGeo.attributes.position;
+      for (let i = 0; i < cliffVertices.count; i++) {
+        if (cliffVertices.getY(i) > 0) {
+          cliffVertices.setY(i, def.getHeight(cliffVertices.getX(i), cliffVertices.getZ(i)));
+        }
+      }
+      cliffGeo.computeVertexNormals();
+      const cliff = new THREE.Mesh(cliffGeo, new THREE.MeshStandardMaterial({
+        color: islandId === 'desert' ? 0xb47b44 : islandId === 'snow' ? 0x64748b : 0x8b6b4a,
+        roughness: 0.9
+      }));
+      cliff.receiveShadow = true;
+      worldGroup.add(cliff);
+
+      // 4. 島ごとの固有オブジェクト・NPC・モンスター
+      if (islandId === 'green') buildGreenIslandProps();
+      else if (islandId === 'desert') buildDesertIslandProps();
+      else buildSnowIslandProps();
+
+      // 5. 光る石版台座
+      buildStoneTabletPedestal(def.tabletPos.x, def.tabletPos.z, islandId);
+
+      // 6. ミニチュア雲
+      cloudGroup = new THREE.Group();
+      const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
+      for (let i = 0; i < 6; i++) {
+        const cg = new THREE.Group();
+        const a = (Math.PI * 2 * i) / 6;
+        const r = 18 + Math.random() * 6;
+        cg.position.set(Math.cos(a) * r, 9.8 + Math.random() * 2.2, Math.sin(a) * r);
+        const s1 = new THREE.Mesh(new THREE.SphereGeometry(1.35, 10, 10), cloudMat);
+        const s2 = new THREE.Mesh(new THREE.SphereGeometry(0.95, 10, 10), cloudMat); s2.position.set(1.05, -0.2, 0.2);
+        const s3 = new THREE.Mesh(new THREE.SphereGeometry(1.0, 10, 10), cloudMat); s3.position.set(-1.0, -0.2, -0.1);
+        cg.add(s1, s2, s3);
+        cloudGroup.add(cg);
+      }
+      worldGroup.add(cloudGroup);
+
+      // 7. 主人公と仲間リナの配置
+      playerActor.group.position.set(def.spawn.x, getTerrainHeight(def.spawn.x, def.spawn.z), def.spawn.z);
+      playerTrail.length = 0;
+      for (let i = 0; i < 20; i++) {
+        playerTrail.push({ x: def.spawn.x, z: def.spawn.z + 1.5 });
+      }
+      if (STATE.lina.joined) {
+        ensureLinaFollower();
+        linaFollower.group.position.set(def.spawn.x - 1.3, getTerrainHeight(def.spawn.x - 1.3, def.spawn.z + 1.4), def.spawn.z + 1.4);
+      }
+
+      document.getElementById('island-icon').textContent = def.icon;
+      document.getElementById('island-title').textContent = def.name;
+      document.getElementById('island-title-mobile').textContent = def.name;
+      applyLighting(lightingMode);
+      audio.playBgm(islandId);
+    }
+
+    function buildStoneTabletPedestal(tx, tz, islandId) {
+      const ty = getTerrainHeight(tx, tz);
+      const pillarMat = new THREE.MeshStandardMaterial({
+        color: islandId === 'desert' ? 0xeab308 : islandId === 'snow' ? 0xbae6fd : 0xcbd5e1,
+        roughness: 0.78
+      });
+      const floorRing = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 5.1, 0.26, 24), pillarMat);
+      floorRing.position.set(tx, ty + 0.1, tz + 1.0);
+      floorRing.receiveShadow = true;
+      worldGroup.add(floorRing);
+
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6 + Math.PI / 6;
+        if (Math.sin(a) > 0.75) continue;
+        const px = tx + Math.cos(a) * 4.1;
+        const pz = tz + 1.0 + Math.sin(a) * 4.1;
+        const ph = i % 2 === 0 ? 3.1 : 2.2;
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.46, ph, 10), pillarMat);
+        p.position.set(px, getTerrainHeight(px, pz) + ph / 2, pz);
+        p.castShadow = true;
+        worldGroup.add(p);
+        obstacles.push({ x: px, z: pz, r: 0.55 });
+      }
+
+      const pedestal = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 1.4), new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8 }));
+      pedestal.position.set(tx, ty + 0.55, tz);
+      pedestal.castShadow = true;
+      worldGroup.add(pedestal);
+      obstacles.push({ x: tx, z: tz, r: 1.05 });
+
+      const crystalColor = islandId === 'desert' ? 0xfbbf24 : islandId === 'snow' ? 0x7dd3fc : 0x38bdf8;
+      tabletCrystal = new THREE.Mesh(
+        new THREE.BoxGeometry(1.15, 1.4, 0.24),
+        new THREE.MeshStandardMaterial({ color: crystalColor, emissive: crystalColor, emissiveIntensity: 0.9, roughness: 0.2 })
+      );
+      tabletCrystal.position.set(tx, ty + 1.95, tz);
+      tabletCrystal.castShadow = true;
+      worldGroup.add(tabletCrystal);
+
+      const tLight = new THREE.PointLight(crystalColor, 1.6, 12);
+      tLight.position.set(tx, ty + 2.2, tz);
+      worldGroup.add(tLight);
+
+      interactables.push({
+        type: 'tablet',
+        pos: new THREE.Vector3(tx, ty + 1.2, tz),
+        radius: 3.1,
+        onInteract: () => openWarpModal()
+      });
+    }
+
+    function addLamp(x, z, color = 0xffb84d) {
+      const g = new THREE.Group();
+      g.position.set(x, getTerrainHeight(x, z), z);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 2.6, 8), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 }));
+      pole.position.y = 1.3; pole.castShadow = true; g.add(pole);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: color, emissiveIntensity: 0.4 });
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 10), mat);
+      orb.position.y = 2.68; g.add(orb);
+      const pt = new THREE.PointLight(color, 0, 10);
+      pt.position.y = 2.68; g.add(pt);
+      lampLights.push({ light: pt, mat });
+      worldGroup.add(g);
+      obstacles.push({ x, z, r: 0.35 });
+    }
+
+    // --- ① はじまりの島 ---
+    function buildGreenIslandProps() {
+      const cobbleMat = new THREE.MeshStandardMaterial({ color: 0xd6cfc2, roughness: 0.9 });
+      [[-5.5,8.5],[-3.5,7.4],[-1.6,6.2],[0,4.5],[0,2.3],[0,0.2],[0,-2.0],[0,-4.2],[0,-6.4],[0,-8.5]].forEach(([px, pz]) => {
+        const s = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.1, 0.16, 7), cobbleMat);
+        s.position.set(px, getTerrainHeight(px, pz) + 0.02, pz); s.receiveShadow = true; worldGroup.add(s);
+      });
+
+      const addHouse = (x, z, rotY, roofCol) => {
+        const g = new THREE.Group();
+        g.position.set(x, getTerrainHeight(x, z), z); g.rotation.y = rotY;
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.3, 2.8), new THREE.MeshStandardMaterial({ color: 0xfef3dc, roughness: 0.88 }));
+        wall.position.y = 1.15; wall.castShadow = true; wall.receiveShadow = true; g.add(wall);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.65, 1.9, 4), new THREE.MeshStandardMaterial({ color: roofCol, roughness: 0.82 }));
+        roof.position.y = 3.2; roof.rotation.y = Math.PI / 4; roof.castShadow = true; g.add(roof);
+        const door = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.35, 0.12), new THREE.MeshStandardMaterial({ color: 0x7c4a2d }));
+        door.position.set(0, 0.68, 1.42); g.add(door);
+        const winMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, emissive: 0xf59e0b, emissiveIntensity: 0.4 });
+        const w1 = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.58, 0.12), winMat); w1.position.set(-0.95, 1.3, 1.42);
+        const w2 = w1.clone(); w2.position.x = 0.95; g.add(w1, w2);
+        lampLights.push({ light: null, mat: winMat });
+        worldGroup.add(g);
+        obstacles.push({ x, z, r: 2.0 });
+      };
+      addHouse(-9.5, 6.0, 0.5, 0xd94e3f);
+      addHouse(-6.0, 12.2, 2.6, 0xe06045);
+      addHouse(5.5, 11.2, -2.5, 0xc84638);
+
+      addLamp(-2.5, 4.5); addLamp(2.5, 4.5); addLamp(-2.8, -4.2);
+
+      const addTree = (x, z, s = 1) => {
+        const g = new THREE.Group(); g.position.set(x, getTerrainHeight(x, z), z);
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24*s, 0.35*s, 1.3*s, 8), new THREE.MeshStandardMaterial({ color: 0x7c4a2d, roughness: 0.9 }));
+        trunk.position.y = 0.65*s; trunk.castShadow = true; g.add(trunk);
+        const lm = new THREE.MeshStandardMaterial({ color: 0x3d9956, roughness: 0.88 });
+        const p1 = new THREE.Mesh(new THREE.SphereGeometry(1.05*s, 10, 10), lm); p1.position.y = 1.95*s; p1.castShadow = true;
+        const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.75*s, 10, 10), lm); p2.position.set(0.55*s, 1.65*s, 0.25*s); p2.castShadow = true;
+        g.add(p1, p2);
+        worldGroup.add(g);
+        obstacles.push({ x, z, r: 0.65 * s });
+      };
+      [[-13.5,1.5,1.15],[-14.2,8.2,0.95],[-11.5,13.5,1.1],[-1.0,15.8,1.05],[10.8,13.5,1.15],[15.2,8.0,1.0],[15.8,-2.5,1.2],[11.5,-8.5,1.05],[-11.0,-7.5,1.15]].forEach(([x,z,s])=>addTree(x,z,s));
+
+      const flCols = [0xf472b6, 0xfacc15, 0xffffff, 0xfb923c];
+      for (let i = 0; i < 32; i++) {
+        const fx = -10 + Math.random() * 20, fz = -2 + Math.random() * 14;
+        if (Math.hypot(fx, fz) > 16 || Math.abs(fx) < 1.8) continue;
+        const fl = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 6), new THREE.MeshStandardMaterial({ color: flCols[i % 4] }));
+        fl.position.set(fx, getTerrainHeight(fx, fz) + 0.14, fz); worldGroup.add(fl);
+      }
+
+      // NPC 1：村長
+      registerIslandNpc({
+        charId: 'elder', x: -4.2, z: 6.2, name: '村長', badge: '💚', badgeBg: '#dcfce7',
+        onInteract: () => {
+          healPartyFull();
+          const herbAdded = STATE.player.herbs < 3;
+          if (herbAdded) STATE.player.herbs = 3;
+          updateStatusUI();
+          audio.seHeal();
+          const lines = ['ようこそ、はじまりの村へ！ まずはひと休みしていくがよい。（パーティ全回復！）'];
+          if (herbAdded) lines.push('やくそうも 3つ まで補充しておいたぞ！');
+          if (!STATE.lina.joined) {
+            lines.push('すぐ近くにいる少女「リナ」に話しかけると、一緒に旅に出てくれるぞ！');
+          } else {
+            lines.push('北の丘の「光る石版」を調べれば、砂漠の島や雪の島へワープできるぞ。3つの島のボスを倒して紋章を集めるのじゃ！');
+          }
+          startDialog('村長', lines);
+        }
+      });
+
+      // NPC 2：鍛冶屋ガルド（1回限り攻撃力+4）
+      registerIslandNpc({
+        charId: 'gald', x: -7.2, z: 9.2, width: 1.95, height: 2.05, name: '鍛冶屋ガルド', badge: '⚔️', badgeBg: '#ffedd5',
+        onInteract: () => {
+          if (!STATE.npcFlags.galdForged) {
+            STATE.npcFlags.galdForged = true;
+            STATE.player.atk += 4;
+            audio.seLevelUp();
+            showDamagePopup(playerActor.group.position, 'ATK +4!', '#fb923c');
+            startDialog('鍛冶屋ガルド', [
+              'ガハハ！ これから石版の島々へ旅立つ若造か！ その剣、わしがカンカンッと鍛え直してやろう！',
+              '……よし、見事な切れ味になったぞ！',
+              '★ アルトの こうげきりょく が 4 あがった！ ★'
+            ]);
+          } else {
+            startDialog('鍛冶屋ガルド', [
+              'おう、その剣の調子はどうだ？ わしが魂を込めて打った一振りだ、どんな魔物にも負けんなよ！'
+            ]);
+          }
+        }
+      });
+
+      // NPC 3：吟遊詩人ミロ（ゆらゆら揺れて石版の伝承を語る）
+      registerIslandNpc({
+        charId: 'milo', x: 4.6, z: 3.4, name: '吟遊詩人ミロ', badge: '🎵', badgeBg: '#fef9c3', behavior: 'sway',
+        onInteract: () => {
+          audio.seSelect();
+          startDialog('吟遊詩人ミロ', [
+            '♪ ポロン、ポロン…… 旅の勇者よ、古き石版の歌を聴いてゆくかい？',
+            'かつてこの海には「緑」「砂漠」「雪」の3つの箱庭がひとつに繋がっていたという。',
+            'それぞれの島のボスを倒し、3つの紋章に光を灯したとき、失われた世界の輝きが蘇るのさ♪'
+          ]);
+        }
+      });
+
+      // NPC 4：薬草売りのババ様（やくそう3個まで無料補充）
+      registerIslandNpc({
+        charId: 'baba', x: -2.2, z: 12.2, name: '薬草売りのババ様', badge: '🌿', badgeBg: '#dcfce7',
+        onInteract: () => {
+          if (STATE.player.herbs < 3) {
+            STATE.player.herbs = 3;
+            updateStatusUI();
+            audio.seHeal();
+            showDamagePopup(playerActor.group.position, '🌿 やくそう補充!', '#4ade80');
+            startDialog('薬草売りのババ様', [
+              'おやまあ、やくそうが減っているじゃないかい。ほれ、摘みたてを3つまで持っておいき！',
+              '★ やくそう を 3こ に補充してもらった！ ★'
+            ]);
+          } else {
+            startDialog('薬草売りのババ様', [
+              'やくそうはしっかり3つ持っているね。旅先でケガをしたら、遠慮なく使ってまたおいでよ！'
+            ]);
+          }
+        }
+      });
+
+      // NPC 5：村のわんこ・ポチ（村を歩き回り、話すとHP少し回復）
+      registerIslandNpc({
+        charId: 'pochi', x: 1.8, z: 9.8, width: 1.4, height: 1.4, name: '村のわんこ・ポチ', badge: '🐾', badgeBg: '#fef3c7', behavior: 'wander', wanderRadius: 3.2,
+        onInteract: () => {
+          const heal = Math.min(STATE.player.maxHp - STATE.player.hp, 12);
+          STATE.player.hp += heal;
+          updateStatusUI();
+          audio.seHeal();
+          showDamagePopup(playerActor.group.position, heal > 0 ? `🐾 +${heal}` : '🐾 ワン！', '#fde047');
+          startDialog('村のわんこ・ポチ', [
+            heal > 0
+              ? `ワン！ ワンワン！（ポチがしっぽを振ってすり寄ってきた！ アルトのHPが ${heal} かいふくした！）`
+              : 'ワン！ ワン！（ポチは元気いっぱいにしっぽを振って応援してくれている！）'
+          ]);
+        }
+      });
+
+      // 仲間イベント：少女リナ
+      if (!STATE.lina.joined) {
+        const { actor: linaNpc, interactObj: linaInteract } = registerIslandNpc({
+          charId: 'lina', x: 3.8, z: 7.4, width: 1.8, height: 2.0, name: '少女リナ', badge: '💖', badgeBg: '#fce7f3',
+          onInteract: () => {
+            audio.seJoin();
+            STATE.lina.joined = true;
+            worldGroup.remove(linaNpc.group);
+            npcActors = npcActors.filter((n) => n !== linaNpc);
+            npcBehaviors = npcBehaviors.filter((b) => b.actor !== linaNpc);
+            interactables = interactables.filter((it) => it !== linaInteract);
+            ensureLinaFollower();
+            linaFollower.group.position.copy(linaNpc.group.position);
+            updateStatusUI();
+            startDialog('少女リナ', [
+              'アルトさん！ 石版の島々をめぐる冒険に出るのですね！',
+              'わたしも一緒に連れていってください！ バトルのときは「癒やしの光」や魔法で援護しますね♪',
+              '★ 少女リナ が パーティにくわわった！ ★'
+            ]);
+          }
+        });
+      }
+
+      // モンスター（スライム、キノコ、石版の番人ボス）
+      spawnIslandMonsters([
+        { charId: 'slime', name: 'みずスライム', x: 8.5, z: 3.0, hp: 18, atk: 5, exp: 12, gold: 8, isBoss: false },
+        { charId: 'slime', name: 'みずスライム', x: 11.5, z: -2.0, hp: 18, atk: 5, exp: 12, gold: 8, isBoss: false },
+        { charId: 'mushroom', name: 'おこりマッシュ', x: 7.2, z: -4.2, hp: 28, atk: 7, exp: 18, gold: 14, isBoss: false },
+        { charId: 'mushroom', name: 'おこりマッシュ', x: -7.5, z: -2.5, hp: 28, atk: 7, exp: 18, gold: 14, isBoss: false },
+        { charId: 'boss_green', name: '石版の番人', x: 0, z: -10.8, hp: 62, atk: 12, exp: 55, gold: 60, isBoss: true, bossKey: 'green', width: 2.7, height: 2.9 }
+      ]);
+    }
+
+    // --- ② 砂漠の島 ---
+    function buildDesertIslandProps() {
+      const pyrMat = new THREE.MeshStandardMaterial({ color: 0xd9a05b, roughness: 0.88 });
+      const pyr = new THREE.Mesh(new THREE.ConeGeometry(5.6, 5.4, 4), pyrMat);
+      pyr.position.set(-9.5, getTerrainHeight(-9.5, -3.5) + 2.5, -3.5);
+      pyr.rotation.y = Math.PI / 4; pyr.castShadow = true; pyr.receiveShadow = true;
+      worldGroup.add(pyr);
+      obstacles.push({ x: -9.5, z: -3.5, r: 4.3 });
+
+      const pyrSmall = new THREE.Mesh(new THREE.ConeGeometry(3.0, 3.0, 4), pyrMat);
+      pyrSmall.position.set(-12.5, getTerrainHeight(-12.5, 4.5) + 1.3, 4.5);
+      pyrSmall.rotation.y = Math.PI / 4; pyrSmall.castShadow = true;
+      worldGroup.add(pyrSmall);
+      obstacles.push({ x: -12.5, z: 4.5, r: 2.3 });
+
+      const oasisWater = new THREE.Mesh(
+        new THREE.CircleGeometry(3.6, 24),
+        new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.9 })
+      );
+      oasisWater.rotation.x = -Math.PI / 2;
+      oasisWater.position.set(8.2, 0.08, 6.8);
+      worldGroup.add(oasisWater);
+      obstacles.push({ x: 8.2, z: 6.8, r: 3.1 });
+
+      const addPalm = (x, z) => {
+        const g = new THREE.Group(); g.position.set(x, getTerrainHeight(x, z), z);
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.3, 3.2, 7), new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.9 }));
+        trunk.position.y = 1.6; trunk.rotation.z = 0.12; trunk.castShadow = true; g.add(trunk);
+        const leafMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.8 });
+        for (let i = 0; i < 5; i++) {
+          const lf = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.55), leafMat);
+          const a = (Math.PI * 2 * i) / 5;
+          lf.position.set(Math.cos(a) * 0.8 - 0.18, 3.15, Math.sin(a) * 0.8);
+          lf.rotation.y = -a; lf.rotation.z = -0.3; lf.castShadow = true;
+          g.add(lf);
+        }
+        worldGroup.add(g);
+        obstacles.push({ x, z, r: 0.55 });
+      };
+      [[4.5, 8.5], [11.6, 5.2], [9.8, 10.6], [5.8, 3.5]].forEach(([x, z]) => addPalm(x, z));
+
+      const addCactus = (x, z) => {
+        const g = new THREE.Group(); g.position.set(x, getTerrainHeight(x, z), z);
+        const cm = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85 });
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 2.0, 8), cm); body.position.y = 1.0; body.castShadow = true;
+        const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.9, 6), cm); armL.position.set(-0.45, 1.2, 0); armL.rotation.z = 0.4;
+        const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.8, 6), cm); armR.position.set(0.42, 1.0, 0); armR.rotation.z = -0.4;
+        g.add(body, armL, armR);
+        worldGroup.add(g);
+        obstacles.push({ x, z, r: 0.55 });
+      };
+      [[-4.5, 10.5], [-6.5, 3.5], [13.5, -2.5], [10.2, -9.5], [-13.5, -9.5]].forEach(([x, z]) => addCactus(x, z));
+
+      addLamp(3.2, 7.8, 0xfbbf24); addLamp(-3.2, 7.8, 0xfbbf24);
+
+      // 砂漠の島 NPC 1：砂漠の商人ザイド（1回限り最大HP+15＆全回復）
+      registerIslandNpc({
+        charId: 'zaid', x: -3.8, z: 8.6, name: '砂漠の商人ザイド', badge: '🌶️', badgeBg: '#ffedd5',
+        onInteract: () => {
+          if (!STATE.npcFlags.zaidSpiced) {
+            STATE.npcFlags.zaidSpiced = true;
+            STATE.player.maxHp += 15;
+            STATE.player.hp = STATE.player.maxHp;
+            updateStatusUI();
+            audio.seLevelUp();
+            showDamagePopup(playerActor.group.position, 'MAX HP +15!', '#fb923c');
+            startDialog('砂漠の商人ザイド', [
+              'いらっしゃい旅の勇者さま！ 良い目をしているね、特別にうち自慢の「秘伝のスパイス」をひとさじサービスしよう！',
+              'カァーッと体の芯から元気が湧いてくるだろう？',
+              '★ アルトの さいだいHP が 15 あがり、HPが全回復した！ ★'
+            ]);
+          } else {
+            startDialog('砂漠の商人ザイド', [
+              '秘伝のスパイスは効いているかい？ 砂漠の暑さにもスフィンクスにも負けるんじゃないよ！'
+            ]);
+          }
+        }
+      });
+
+      // 砂漠の島 NPC 2：考古学者ソフィア（集めた紋章数でセリフ変化）
+      registerIslandNpc({
+        charId: 'sophia', x: -5.4, z: -1.4, name: '考古学者ソフィア', badge: '📜', badgeBg: '#fef9c3',
+        onInteract: () => {
+          const count = ['green', 'desert', 'snow'].filter((k) => STATE.bossDefeated[k]).length;
+          audio.seSelect();
+          if (count === 0) {
+            startDialog('考古学者ソフィア', [
+              'あら、こんにちは！ わたしはこのピラミッド遺跡と石版の関係を調べている考古学者のソフィアよ。',
+              'まだどの島の紋章も灯っていないみたいね。まずは各島の北にいる守護ボスを倒して、3つの紋章を集めてみて！'
+            ]);
+          } else if (count === 1) {
+            startDialog('考古学者ソフィア', [
+              'すごいわ！ もう1つ紋章を灯したのね！ 石版のエネルギーが少し共鳴し始めているのがわかるわ。',
+              '残りの2つの島でも、きっと古代の秘密が待っているはずよ！'
+            ]);
+          } else if (count === 2) {
+            startDialog('考古学者ソフィア', [
+              'まあ、紋章が2つも揃ったの！？ あと残り1つで、すべての石版が完全な輝きを取り戻すわ！',
+              '歴史的瞬間までもう少し……応援しているわね！'
+            ]);
+          } else {
+            startDialog('考古学者ソフィア', [
+              '信じられない……3つの紋章がすべて輝いているわ！ 文献に記された伝説をこの目で見られるなんて感激よ！',
+              'あなたとリナちゃんの冒険は、きっと後世まで語り継がれるわね！'
+            ]);
+          }
+        }
+      });
+
+      // 砂漠の島 NPC 3：オアシスの踊り子ライラ（オアシスで揺れて踊り、HP/MP全回復）
+      registerIslandNpc({
+        charId: 'laila', x: 6.0, z: 9.8, name: '踊り子ライラ', badge: '💃', badgeBg: '#fce7f3', behavior: 'sway',
+        onInteract: () => {
+          healPartyFull();
+          updateStatusUI();
+          audio.seHeal();
+          showDamagePopup(playerActor.group.position, '✨ HP/MP全回復!', '#f472b6');
+          startDialog('オアシスの踊り子ライラ', [
+            'ふふ、砂漠の旅でお疲れかしら？ わたしの「癒やしの舞」を見ていって♪',
+            '……ライラの華麗な舞が心地よい風を運んだ！（パーティのHPとMPが全回復した！）'
+          ]);
+        }
+      });
+
+      // モンスター（サボテンダー風、サソリ、スフィンクス風ボス）
+      spawnIslandMonsters([
+        { charId: 'cactus', name: 'サボテン坊や', x: -3.5, z: 2.5, hp: 34, atk: 9, exp: 24, gold: 18, isBoss: false },
+        { charId: 'cactus', name: 'サボテン坊や', x: 7.5, z: -2.0, hp: 34, atk: 9, exp: 24, gold: 18, isBoss: false },
+        { charId: 'scorpion', name: 'さそりアーマー', x: 5.0, z: -6.5, hp: 46, atk: 12, exp: 34, gold: 28, isBoss: false },
+        { charId: 'scorpion', name: 'さそりアーマー', x: -5.2, z: -7.0, hp: 46, atk: 12, exp: 34, gold: 28, isBoss: false },
+        { charId: 'boss_desert', name: '砂漠のスフィンクス', x: 0, z: -10.5, hp: 98, atk: 16, exp: 85, gold: 100, isBoss: true, bossKey: 'desert', width: 2.8, height: 3.0 }
+      ]);
+    }
+
+    // --- ③ 雪の島 ---
+    function buildSnowIslandProps() {
+      const iceMat = new THREE.MeshStandardMaterial({ color: 0xbae6fd, roughness: 0.1, metalness: 0.35, transparent: true, opacity: 0.92 });
+      const lake = new THREE.Mesh(new THREE.CircleGeometry(4.2, 24), iceMat);
+      lake.rotation.x = -Math.PI / 2;
+      lake.position.set(7.8, 0.06, 2.2);
+      worldGroup.add(lake);
+
+      // 雪小屋
+      const cabin = new THREE.Group();
+      const cx = -7.5, cz = 7.5;
+      cabin.position.set(cx, getTerrainHeight(cx, cz), cz); cabin.rotation.y = 0.55;
+      const logWall = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 3.0), new THREE.MeshStandardMaterial({ color: 0x7c4a2d, roughness: 0.9 }));
+      logWall.position.y = 1.2; logWall.castShadow = true; cabin.add(logWall);
+      const snowRoof = new THREE.Mesh(new THREE.ConeGeometry(3.0, 2.1, 4), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.9 }));
+      snowRoof.position.y = 3.35; snowRoof.rotation.y = Math.PI / 4; snowRoof.castShadow = true; cabin.add(snowRoof);
+      const warmWinMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xf97316, emissiveIntensity: 1.2 });
+      const win1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.14), warmWinMat); win1.position.set(-0.9, 1.25, 1.52);
+      const win2 = win1.clone(); win2.position.x = 0.9; cabin.add(win1, win2);
+      const cabinLight = new THREE.PointLight(0xff9e44, 1.2, 11); cabinLight.position.set(0, 1.6, 2.2); cabin.add(cabinLight);
+      lampLights.push({ light: cabinLight, mat: warmWinMat, alwaysWarm: true });
+      worldGroup.add(cabin);
+      obstacles.push({ x: cx, z: cz, r: 2.3 });
+
+      const addPine = (x, z, s = 1) => {
+        const g = new THREE.Group(); g.position.set(x, getTerrainHeight(x, z), z);
+        const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.2*s, 0.3*s, 1.0*s, 7), new THREE.MeshStandardMaterial({ color: 0x5c3a21 }));
+        tr.position.y = 0.5*s; g.add(tr);
+        const greenM = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.85 });
+        const snowM = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.9 });
+        const c1 = new THREE.Mesh(new THREE.ConeGeometry(1.3*s, 1.8*s, 8), greenM); c1.position.y = 1.6*s; c1.castShadow = true;
+        const c2 = new THREE.Mesh(new THREE.ConeGeometry(1.0*s, 1.6*s, 8), greenM); c2.position.y = 2.6*s; c2.castShadow = true;
+        const cap = new THREE.Mesh(new THREE.ConeGeometry(0.7*s, 1.0*s, 8), snowM); cap.position.y = 3.25*s; cap.castShadow = true;
+        g.add(c1, c2, cap);
+        worldGroup.add(g);
+        obstacles.push({ x, z, r: 0.7 * s });
+      };
+      [[-13.5,2.0,1.1],[-12.5,11.5,1.0],[-2.5,15.0,1.1],[6.5,13.2,1.05],[14.2,7.5,1.1],[14.8,-3.5,1.15],[10.5,-10.5,1.0],[-11.5,-7.5,1.15]].forEach(([x,z,s])=>addPine(x,z,s));
+
+      const crysMat = new THREE.MeshStandardMaterial({ color: 0x7dd3fc, emissive: 0x0284c7, emissiveIntensity: 0.35, roughness: 0.2, transparent: true, opacity: 0.88 });
+      [[-5.8, -1.5], [12.5, 2.5], [4.8, -8.5], [-8.5, -11.5]].forEach(([x, z]) => {
+        const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.95, 0), crysMat);
+        cr.scale.set(0.7, 1.8, 0.7);
+        cr.position.set(x, getTerrainHeight(x, z) + 1.2, z);
+        cr.castShadow = true;
+        worldGroup.add(cr);
+        obstacles.push({ x, z, r: 0.8 });
+      });
+
+      addLamp(-3.0, 6.2, 0xffb84d); addLamp(2.8, 6.2, 0xffb84d);
+
+      // 揺らめく焚き火
+      const fireX = 3.2, fireZ = 7.4;
+      const fireGroup = new THREE.Group();
+      fireGroup.position.set(fireX, getTerrainHeight(fireX, fireZ), fireZ);
+      const logMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+      for (let i = 0; i < 3; i++) {
+        const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.3, 6), logMat);
+        lg.rotation.z = Math.PI / 2;
+        lg.rotation.y = (Math.PI / 3) * i;
+        lg.position.y = 0.14;
+        fireGroup.add(lg);
+      }
+      const flameOuter = new THREE.Mesh(
+        new THREE.ConeGeometry(0.45, 1.15, 7),
+        new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xea580c, emissiveIntensity: 1.5, transparent: true, opacity: 0.9 })
+      );
+      flameOuter.position.y = 0.65;
+      const flameInner = new THREE.Mesh(
+        new THREE.ConeGeometry(0.24, 0.72, 6),
+        new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfacc15, emissiveIntensity: 1.8 })
+      );
+      flameInner.position.y = 0.5;
+      const fireLight = new THREE.PointLight(0xff7b29, 2.0, 12);
+      fireLight.position.y = 1.2;
+      fireGroup.add(flameOuter, flameInner, fireLight);
+      worldGroup.add(fireGroup);
+      campfireFlames.push({ outer: flameOuter, inner: flameInner, light: fireLight });
+      obstacles.push({ x: fireX, z: fireZ, r: 0.85 });
+
+      // 降雪パーティクル
+      const snowCount = 340;
+      const snowGeo = new THREE.BufferGeometry();
+      const snowPos = new Float32Array(snowCount * 3);
+      for (let i = 0; i < snowCount; i++) {
+        snowPos[i * 3] = (Math.random() - 0.5) * 44;
+        snowPos[i * 3 + 1] = Math.random() * 18;
+        snowPos[i * 3 + 2] = (Math.random() - 0.5) * 44;
+      }
+      snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+      snowPoints = new THREE.Points(
+        snowGeo,
+        new THREE.PointsMaterial({ color: 0xffffff, size: 0.28, transparent: true, opacity: 0.88 })
+      );
+      worldGroup.add(snowPoints);
+
+      // 雪の島 NPC 1：雪山の木こりバルク（焚き火のそばで1回限り防御力+4）
+      registerIslandNpc({
+        charId: 'balk', x: 5.0, z: 7.8, width: 2.0, height: 2.15, name: '雪山の木こりバルク', badge: '🪵', badgeBg: '#e0f2fe',
+        onInteract: () => {
+          if (!STATE.npcFlags.balkCloaked) {
+            STATE.npcFlags.balkCloaked = true;
+            STATE.player.def += 4;
+            audio.seLevelUp();
+            showDamagePopup(playerActor.group.position, 'DEF +4!', '#38bdf8');
+            startDialog('雪山の木こりバルク', [
+              'おおっ、そんな薄着で雪山に来たのか！ 風邪をひいちまうぞ、この「温かい毛皮のマント」を羽織っていきな！',
+              'ふかふかだが丈夫だぜ、魔物の攻撃もかなり和らげてくれるはずだ！',
+              '★ アルトの しゅびりょく が 4 あがった！ ★'
+            ]);
+          } else {
+            startDialog('雪山の木こりバルク', [
+              '毛皮のマントは温かいかい？ 寒くなったらまた焚き火にあたりに来なよ！'
+            ]);
+          }
+        }
+      });
+
+      // 雪の島 NPC 2：氷の占い師エルザ（未討伐ボスを占い、全討伐で祝福パーティクル）
+      registerIslandNpc({
+        charId: 'elsa', x: -5.2, z: -2.2, name: '氷の占い師エルザ', badge: '🔮', badgeBg: '#dbeafe', behavior: 'sway',
+        onInteract: () => {
+          const remaining = ['green', 'desert', 'snow']
+            .filter((k) => !STATE.bossDefeated[k])
+            .map((k) => `「${ISLAND_DEFS[k].name}」`);
+          if (remaining.length > 0) {
+            audio.seSpell();
+            startDialog('氷の占い師エルザ', [
+              '……青い水晶に、あなたの運命が映し出されていますわ。',
+              `まだ紋章が眠っているのは ${remaining.join(' と ')} です。`,
+              'どうか準備を整えて、北の石版を守護する存在に挑んでくださいまし。'
+            ]);
+          } else {
+            audio.seWarp();
+            spawnWarpLightParticles(playerActor.group.position);
+            healPartyFull();
+            updateStatusUI();
+            startDialog('氷の占い師エルザ', [
+              '……なんとまばゆい光でしょう！ 3つの島の紋章がすべて目覚めましたのね！',
+              '水晶があなたを「真の石版の勇者」として祝福しています。氷の聖なる光で、心身を癒やしましょう✨'
+            ]);
+          }
+        }
+      });
+
+      // 雪の島 NPC 3：ペンギンのペン太（凍った池を歩き、話すとMP全回復）
+      registerIslandNpc({
+        charId: 'penta', x: 7.8, z: 2.2, width: 1.45, height: 1.5, name: 'ペンギンのペン太', badge: '🐧', badgeBg: '#e0f2fe', behavior: 'wander', wanderRadius: 2.8,
+        onInteract: () => {
+          STATE.player.mp = STATE.player.maxMp;
+          STATE.lina.mp = STATE.lina.maxMp;
+          updateStatusUI();
+          audio.seHeal();
+          showDamagePopup(playerActor.group.position, '🐧 MP全回復!', '#38bdf8');
+          startDialog('ペンギンのペン太', [
+            'クエー！ クエックエー！（ペン太がパタパタ翼を振って氷の涼風を送ってくれた！）',
+            '★ パーティの MP が ぜんかいふく した！ ★'
+          ]);
+        }
+      });
+
+      // モンスター（雪だるま、イエティ風、氷竜ボス）
+      spawnIslandMonsters([
+        { charId: 'snowman', name: 'ユキだるま', x: 3.5, z: 1.5, hp: 48, atk: 12, exp: 36, gold: 28, isBoss: false },
+        { charId: 'snowman', name: 'ユキだるま', x: -4.8, z: 1.2, hp: 48, atk: 12, exp: 36, gold: 28, isBoss: false },
+        { charId: 'yeti', name: '雪山のイエティ', x: 5.5, z: -5.5, hp: 64, atk: 15, exp: 48, gold: 40, isBoss: false },
+        { charId: 'yeti', name: '雪山のイエティ', x: -5.5, z: -6.2, hp: 64, atk: 15, exp: 48, gold: 40, isBoss: false },
+        { charId: 'boss_snow', name: '氷竜フロスト', x: 0, z: -10.5, hp: 132, atk: 19, exp: 120, gold: 150, isBoss: true, bossKey: 'snow', width: 2.9, height: 3.1 }
+      ]);
+    }
+
+    function spawnIslandMonsters(configs) {
+      configs.forEach((cfg) => {
+        if (cfg.isBoss && STATE.bossDefeated[cfg.bossKey]) return;
+        const actor = new PaperCharacter({
+          charId: cfg.charId,
+          x: cfg.x,
+          z: cfg.z,
+          width: cfg.width || 1.75,
+          height: cfg.height || 1.85,
+          name: cfg.name,
+          type: 'monster',
+          parent: worldGroup
+        });
+        monsterActors.push({
+          actor,
+          ...cfg,
+          homeX: cfg.x,
+          homeZ: cfg.z,
+          wanderAngle: Math.random() * Math.PI * 2,
+          wanderTimer: 1 + Math.random() * 2,
+          alive: true,
+          respawnTimer: 0
+        });
+      });
+    }
+
+    function ensureLinaFollower() {
+      if (!linaFollower) {
+        linaFollower = new PaperCharacter({
+          charId: 'lina',
+          x: playerActor.group.position.x - 1.2,
+          z: playerActor.group.position.z + 1.2,
+          width: 1.78,
+          height: 1.98,
+          name: 'リナ',
+          type: 'ally',
+          parent: scene
+        });
+      }
+      linaFollower.group.visible = true;
+    }
+
+    function healPartyFull() {
+      STATE.player.hp = STATE.player.maxHp;
+      STATE.player.mp = STATE.player.maxMp;
+      STATE.lina.hp = STATE.lina.maxHp;
+      STATE.lina.mp = STATE.lina.maxMp;
+    }
+
+    // =========================================================================
+    // 7. ライティング切替（☀️ 昼 → 🌇 夕方 → 🌙 夜）
+    // =========================================================================
+    function applyLighting(mode) {
+      lightingMode = mode;
+      const btn = document.getElementById('btn-time');
+      if (mode === 'day') {
+        const bg = STATE.currentIsland === 'desert' ? 0xbae6fd : STATE.currentIsland === 'snow' ? 0xcbe9ff : 0x9be2ff;
+        scene.background = new THREE.Color(bg);
+        scene.fog = new THREE.FogExp2(bg, 0.01);
+        sunLight.color.setHex(0xfff6db);
+        sunLight.intensity = 1.28;
+        sunLight.position.set(18, 28, 16);
+        hemiLight.color.setHex(0xe0f2fe);
+        hemiLight.groundColor.setHex(0x6b8c52);
+        hemiLight.intensity = 0.75;
+        lampLights.forEach((l) => {
+          if (l.light) l.light.intensity = l.alwaysWarm ? 0.6 : 0;
+          if (l.mat) l.mat.emissiveIntensity = l.alwaysWarm ? 0.8 : 0.25;
+        });
+        btn.textContent = '☀️ 昼';
+      } else if (mode === 'evening') {
+        scene.background = new THREE.Color(0xf9a875);
+        scene.fog = new THREE.FogExp2(0xf4a274, 0.014);
+        sunLight.color.setHex(0xff8e42);
+        sunLight.intensity = 1.32;
+        sunLight.position.set(-22, 15, 12);
+        hemiLight.color.setHex(0xffc994);
+        hemiLight.groundColor.setHex(0x4a3552);
+        hemiLight.intensity = 0.62;
+        lampLights.forEach((l) => {
+          if (l.light) l.light.intensity = 1.6;
+          if (l.mat) l.mat.emissiveIntensity = 1.4;
+        });
+        btn.textContent = '🌇 夕方';
+      } else {
+        scene.background = new THREE.Color(0x0f172a);
+        scene.fog = new THREE.FogExp2(0x131d36, 0.015);
+        sunLight.color.setHex(0x93c5fd);
+        sunLight.intensity = 0.55;
+        sunLight.position.set(-14, 24, -12);
+        hemiLight.color.setHex(0x334155);
+        hemiLight.groundColor.setHex(0x1e293b);
+        hemiLight.intensity = 0.5;
+        lampLights.forEach((l) => {
+          if (l.light) l.light.intensity = 2.4;
+          if (l.mat) l.mat.emissiveIntensity = 2.0;
+        });
+        btn.textContent = '🌙 夜';
+      }
+    }
+
+    // =========================================================================
+    // 8. 石版ワープモーダル＆光のパーティクル演出
+    // =========================================================================
+    function openWarpModal() {
+      STATE.mode = 'modal';
+      setExploreControlsVisible(false);
+      const list = document.getElementById('warp-list');
+      list.innerHTML = '';
+
+      Object.values(ISLAND_DEFS).forEach((isl) => {
+        const isCurrent = isl.id === STATE.currentIsland;
+        const cleared = STATE.bossDefeated[isl.id];
+        const btn = document.createElement('button');
+        btn.className = `w-full text-left p-3 rounded-xl border-2 transition flex items-center justify-between gap-3 ${
+          isCurrent
+            ? 'bg-sky-900/50 border-sky-400/70 opacity-75 cursor-default'
+            : 'bg-slate-800/90 border-white/40 hover:bg-indigo-900/90 hover:border-amber-300 cursor-pointer'
+        }`;
+        btn.innerHTML = `
+          <div>
+            <div class="font-extrabold text-sm sm:text-base flex items-center gap-2">
+              <span>${isl.icon}</span>
+              <span class="text-amber-200">${isl.name}</span>
+              ${isCurrent ? '<span class="text-[10px] bg-sky-500 text-white px-2 py-0.5 rounded-full">現在地</span>' : ''}
+            </div>
+            <div class="text-xs text-slate-300 mt-0.5">${isl.desc}</div>
+          </div>
+          <div class="text-xs font-bold flex-shrink-0 ${cleared ? 'text-emerald-300' : 'text-slate-400'}">
+            ${cleared ? '★ 紋章点灯' : '紋章未点灯'}
+          </div>
+        `;
+        if (!isCurrent) btn.onclick = () => executeWarp(isl.id);
+        list.appendChild(btn);
+      });
+
+      document.getElementById('warp-modal').classList.remove('hidden');
+      document.getElementById('warp-modal').classList.add('flex');
+    }
+
+    function closeWarpModal() {
+      document.getElementById('warp-modal').classList.add('hidden');
+      document.getElementById('warp-modal').classList.remove('flex');
+      STATE.mode = 'explore';
+      setExploreControlsVisible(true);
+    }
+
+    function spawnWarpLightParticles(origin) {
+      if (warpParticles) scene.remove(warpParticles);
+      const count = 90;
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 2.2;
+        pos[i * 3] = origin.x + Math.cos(a) * r;
+        pos[i * 3 + 1] = origin.y + Math.random() * 2.5;
+        pos[i * 3 + 2] = origin.z + Math.sin(a) * r;
+      }
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      warpParticles = new THREE.Points(
+        geo,
+        new THREE.PointsMaterial({ color: 0xe0f2fe, size: 0.35, transparent: true, opacity: 1 })
+      );
+      warpParticles.userData = { life: 1.2 };
+      scene.add(warpParticles);
+    }
+
+    async function executeWarp(targetIslandId) {
+      closeWarpModal();
+      STATE.mode = 'modal';
+      setExploreControlsVisible(false);
+      audio.seWarp();
+      spawnWarpLightParticles(playerActor.group.position);
+
+      const flash = document.getElementById('warp-flash');
+      flash.style.opacity = '1';
+      await sleep(500);
+
+      buildIslandWorld(targetIslandId);
+      spawnWarpLightParticles(playerActor.group.position);
+      await sleep(220);
+      flash.style.opacity = '0';
+      await sleep(380);
+
+      STATE.mode = 'explore';
+      setExploreControlsVisible(true);
+    }
+
+    // =========================================================================
+    // 9. UI更新・会話・コマンドバトル（リナの自律援護付き）
+    // =========================================================================
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    function updateStatusUI() {
+      const p = STATE.player;
+      document.getElementById('stat-lv').textContent = p.lv;
+      document.getElementById('stat-hp').textContent = p.hp;
+      document.getElementById('stat-maxhp').textContent = p.maxHp;
+      document.getElementById('stat-mp').textContent = p.mp;
+      document.getElementById('stat-maxmp').textContent = p.maxMp;
+      document.getElementById('stat-exp').textContent = p.exp;
+      document.getElementById('stat-nextexp').textContent = p.nextExp;
+      document.getElementById('stat-gold').textContent = p.gold;
+      document.getElementById('herb-count').textContent = p.herbs;
+      document.getElementById('bar-hp').style.width = `${Math.max(0, (p.hp / p.maxHp) * 100)}%`;
+      document.getElementById('bar-mp').style.width = `${Math.max(0, (p.mp / p.maxMp) * 100)}%`;
+
+      const linaCard = document.getElementById('lina-status-card');
+      if (STATE.lina.joined) {
+        linaCard.classList.remove('hidden');
+        document.getElementById('lina-hp').textContent = STATE.lina.hp;
+        document.getElementById('lina-maxhp').textContent = STATE.lina.maxHp;
+        document.getElementById('lina-mp').textContent = STATE.lina.mp;
+        document.getElementById('lina-maxmp').textContent = STATE.lina.maxMp;
+        document.getElementById('bar-lina-hp').style.width = `${Math.max(0, (STATE.lina.hp / STATE.lina.maxHp) * 100)}%`;
+        document.getElementById('bar-lina-mp').style.width = `${Math.max(0, (STATE.lina.mp / STATE.lina.maxMp) * 100)}%`;
+      }
+
+      ['green', 'desert', 'snow'].forEach((k) => {
+        const el = document.getElementById(`crest-${k}`);
+        const elM = document.getElementById(`crest-${k}-m`);
+        if (STATE.bossDefeated[k]) {
+          el.className = 'px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-extrabold shadow';
+          elM.className = 'opacity-100 drop-shadow';
+        }
+      });
+    }
+
+    function setExploreControlsVisible(visible) {
+      document.getElementById('joystick-zone').style.display = visible ? 'block' : 'none';
+      document.getElementById('btn-action').style.display = visible ? 'flex' : 'none';
+    }
+
+    function showDamagePopup(worldPos, text, color = '#ffffff') {
+      const vec = worldPos.clone();
+      vec.y += 2.1;
+      vec.project(camera);
+      const sx = (vec.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-vec.y * 0.5 + 0.5) * window.innerHeight;
+      const el = document.createElement('div');
+      el.className = 'damage-popup';
+      el.textContent = text;
+      el.style.left = `${sx}px`;
+      el.style.top = `${sy}px`;
+      el.style.color = color;
+      document.getElementById('popup-layer').appendChild(el);
+      setTimeout(() => el.remove(), 980);
+    }
+
+    // --- 会話システム ---
+    let dialogQueue = [], dialogIndex = 0, dialogFullText = '', dialogCharPos = 0, dialogTimer = null, dialogCb = null;
+
+    function startDialog(speaker, lines, onComplete = null) {
+      STATE.mode = 'dialog';
+      setExploreControlsVisible(false);
+      dialogQueue = lines; dialogIndex = 0; dialogCb = onComplete;
+      document.getElementById('dialog-speaker').textContent = speaker;
+      document.getElementById('dialog-box').classList.remove('hidden');
+      showDialogLine();
+    }
+
+    function showDialogLine() {
+      clearInterval(dialogTimer);
+      dialogFullText = dialogQueue[dialogIndex];
+      dialogCharPos = 0;
+      const textEl = document.getElementById('dialog-text');
+      const nextEl = document.getElementById('dialog-next');
+      textEl.textContent = ''; nextEl.classList.add('hidden');
+      dialogTimer = setInterval(() => {
+        dialogCharPos++;
+        textEl.textContent = dialogFullText.slice(0, dialogCharPos);
+        if (dialogCharPos % 2 === 1) audio.seTalk();
+        if (dialogCharPos >= dialogFullText.length) {
+          clearInterval(dialogTimer); dialogTimer = null;
+          nextEl.classList.remove('hidden');
+        }
+      }, 30);
+    }
+
+    function advanceDialog() {
+      if (STATE.mode !== 'dialog') return;
+      if (dialogTimer) {
+        clearInterval(dialogTimer); dialogTimer = null;
+        document.getElementById('dialog-text').textContent = dialogFullText;
+        document.getElementById('dialog-next').classList.remove('hidden');
+        return;
+      }
+      audio.seSelect();
+      dialogIndex++;
+      if (dialogIndex < dialogQueue.length) {
+        showDialogLine();
+      } else {
+        document.getElementById('dialog-box').classList.add('hidden');
+        STATE.mode = 'explore';
+        setExploreControlsVisible(true);
+        if (dialogCb) { const fn = dialogCb; dialogCb = null; fn(); }
+      }
+    }
+
+    // --- コマンドバトル ---
+    function setBattleLog(msg) { document.getElementById('battle-log').textContent = msg; }
+    function updateBattleEnemyUI() {
+      const b = STATE.battle;
+      document.getElementById('battle-enemy-name').textContent = b.enemyObj.name;
+      document.getElementById('battle-enemy-hp-bar').style.width = `${Math.max(0, (b.enemyHp / b.enemyMaxHp) * 100)}%`;
+    }
+    function setBattleCommandsEnabled(enabled) {
+      document.querySelectorAll('#battle-commands button, #battle-spells button').forEach((btn) => btn.disabled = !enabled);
+    }
+
+    function startBattle(monsterObj) {
+      if (STATE.mode !== 'explore') return;
+      STATE.mode = 'battle';
+      setExploreControlsVisible(false);
+      audio.seEncounter();
+      audio.playBgm('battle');
+
+      STATE.battle.enemyObj = monsterObj;
+      STATE.battle.enemyHp = monsterObj.hp;
+      STATE.battle.enemyMaxHp = monsterObj.hp;
+      STATE.battle.busy = false;
+
+      const pPos = playerActor.group.position;
+      const ePos = monsterObj.actor.group.position;
+      const dx = ePos.x - pPos.x, dz = ePos.z - pPos.z;
+      const dist = Math.hypot(dx, dz) || 1;
+      if (dist < 2.8) {
+        const push = (2.8 - dist) * 0.5;
+        pPos.x -= (dx / dist) * push; pPos.z -= (dz / dist) * push;
+        pPos.y = getTerrainHeight(pPos.x, pPos.z);
+      }
+
+      document.getElementById('battle-commands').classList.remove('hidden');
+      document.getElementById('battle-spells').classList.add('hidden');
+      document.getElementById('battle-ui').classList.remove('hidden');
+      document.getElementById('battle-ui').classList.add('flex');
+      updateBattleEnemyUI();
+      updateStatusUI();
+      setBattleCommandsEnabled(true);
+      setBattleLog(`${monsterObj.name} が あらわれた！\nアルトはどうする？`);
+    }
+
+    async function animateLunge(attacker, targetPos) {
+      const dir = new THREE.Vector3().subVectors(targetPos, attacker.group.position);
+      dir.y = 0;
+      if (dir.lengthSq() > 0.001) dir.normalize().multiplyScalar(1.05);
+      for (let i = 0; i < 6; i++) {
+        attacker.lungeOffset.copy(dir).multiplyScalar((i + 1) / 6);
+        attacker.lungeOffset.y = Math.sin(((i + 1) / 6) * Math.PI) * 0.45;
+        await sleep(20);
+      }
+      for (let i = 5; i >= 0; i--) {
+        attacker.lungeOffset.copy(dir).multiplyScalar(i / 6);
+        await sleep(20);
+      }
+      attacker.lungeOffset.set(0, 0, 0);
+    }
+
+    async function checkBattleVictory() {
+      const b = STATE.battle;
+      const p = STATE.player;
+      const enemy = b.enemyObj;
+      if (b.enemyHp > 0) return false;
+
+      audio.seVictory();
+      enemy.alive = false;
+      enemy.actor.group.visible = false;
+      enemy.respawnTimer = enemy.isBoss ? 999999 : 22;
+
+      p.exp += enemy.exp;
+      p.gold += enemy.gold;
+      updateStatusUI();
+      setBattleLog(`${enemy.name} を たおした！\nけいけんち ${enemy.exp} と ${enemy.gold}G をかくとく！`);
+      await sleep(1100);
+
+      while (p.exp >= p.nextExp) {
+        p.exp -= p.nextExp;
+        p.lv++;
+        p.nextExp = Math.floor(p.nextExp * 1.48);
+        p.maxHp += 9; p.maxMp += 4; p.atk += 3;
+        STATE.lina.maxHp += 6; STATE.lina.maxMp += 4;
+        healPartyFull();
+        updateStatusUI();
+        audio.seLevelUp();
+        showDamagePopup(playerActor.group.position, 'LEVEL UP!', '#fde047');
+        setBattleLog(`アルトは レベル ${p.lv} にあがった！\nHP・MPがぜんかいふくし、ちからが上がった！`);
+        await sleep(1250);
+      }
+
+      if (enemy.isBoss && enemy.bossKey) {
+        STATE.bossDefeated[enemy.bossKey] = true;
+        updateStatusUI();
+        setBattleLog(`★ ${ISLAND_DEFS[enemy.bossKey].name} の石版の紋章が輝いた！ ★`);
+        await sleep(1400);
+      }
+
+      endBattle();
+
+      if (STATE.bossDefeated.green && STATE.bossDefeated.desert && STATE.bossDefeated.snow && !STATE.allClearedShown) {
+        STATE.allClearedShown = true;
+        STATE.mode = 'modal';
+        setExploreControlsVisible(false);
+        audio.seVictory();
+        document.getElementById('clear-modal').classList.remove('hidden');
+        document.getElementById('clear-modal').classList.add('flex');
+      }
+      return true;
+    }
+
+    async function handleBattleAction(action, spellType = null) {
+      if (STATE.mode !== 'battle' || STATE.battle.busy) return;
+      const b = STATE.battle;
+      const p = STATE.player;
+      const enemy = b.enemyObj;
+      b.busy = true;
+      setBattleCommandsEnabled(false);
+
+      document.getElementById('battle-spells').classList.add('hidden');
+      document.getElementById('battle-commands').classList.remove('hidden');
+
+      // 1. 勇者の行動
+      if (action === 'attack') {
+        audio.seAttack();
+        setBattleLog('アルトの こうげき！');
+        await animateLunge(playerActor, enemy.actor.group.position);
+        const dmg = Math.max(1, p.atk + Math.floor(Math.random() * 5) - 1);
+        b.enemyHp = Math.max(0, b.enemyHp - dmg);
+        enemy.actor.hitFlash = 1.0; enemy.actor.shakeTimer = 0.35;
+        showDamagePopup(enemy.actor.group.position, `-${dmg}`, '#fde047');
+        updateBattleEnemyUI();
+        setBattleLog(`${enemy.name} に ${dmg} のダメージ！`);
+        await sleep(720);
+      } else if (action === 'spell') {
+        if (spellType === 'fire') {
+          if (p.mp < 4) {
+            setBattleLog('MPが たりない！'); await sleep(650);
+            b.busy = false; setBattleCommandsEnabled(true); return;
+          }
+          p.mp -= 4; updateStatusUI(); audio.seSpell();
+          setBattleLog('アルトは 火の矢 をとなえた！');
+          await sleep(420);
+          const dmg = Math.floor(p.atk * 1.85) + Math.floor(Math.random() * 6);
+          b.enemyHp = Math.max(0, b.enemyHp - dmg);
+          enemy.actor.hitFlash = 1.0; enemy.actor.shakeTimer = 0.45;
+          showDamagePopup(enemy.actor.group.position, `🔥-${dmg}`, '#fb923c');
+          updateBattleEnemyUI();
+          setBattleLog(`${enemy.name} に ${dmg} の炎ダメージ！`);
+          await sleep(760);
+        } else if (spellType === 'heal') {
+          if (p.mp < 3) {
+            setBattleLog('MPが たりない！'); await sleep(650);
+            b.busy = false; setBattleCommandsEnabled(true); return;
+          }
+          p.mp -= 3;
+          const heal = Math.min(p.maxHp - p.hp, 20 + p.lv * 4);
+          p.hp += heal; updateStatusUI(); audio.seHeal();
+          showDamagePopup(playerActor.group.position, `+${heal}`, '#4ade80');
+          setBattleLog(`アルトは 癒やしの光 をとなえた！\nHPが ${heal} かいふくした！`);
+          await sleep(800);
+        }
+      } else if (action === 'item') {
+        if (p.herbs <= 0) {
+          setBattleLog('やくそう をもっていない！'); await sleep(650);
+          b.busy = false; setBattleCommandsEnabled(true); return;
+        }
+        p.herbs--;
+        const heal = Math.min(p.maxHp - p.hp, 28);
+        p.hp += heal; updateStatusUI(); audio.seHeal();
+        showDamagePopup(playerActor.group.position, `🌿+${heal}`, '#4ade80');
+        setBattleLog(`アルトは やくそう をつかった！\nHPが ${heal} かいふくした！`);
+        await sleep(800);
+      } else if (action === 'run') {
+        audio.seSelect();
+        if (enemy.isBoss) {
+          setBattleLog(`${enemy.name} からは にげられない！`);
+          await sleep(800);
+        } else {
+          setBattleLog('アルトは うまく にげだした！');
+          await sleep(700);
+          const away = new THREE.Vector3().subVectors(playerActor.group.position, enemy.actor.group.position);
+          away.y = 0; if (away.lengthSq() < 0.01) away.set(0, 0, 1);
+          away.normalize().multiplyScalar(2.3);
+          const nx = playerActor.group.position.x + away.x, nz = playerActor.group.position.z + away.z;
+          if (canWalkTo(nx, nz)) playerActor.group.position.set(nx, getTerrainHeight(nx, nz), nz);
+          endBattle();
+          return;
+        }
+      }
+
+      if (await checkBattleVictory()) return;
+
+      // 2. 仲間「少女リナ」の自律援護ターン
+      if (STATE.lina.joined && linaFollower) {
+        const lina = STATE.lina;
+        if (p.hp <= p.maxHp * 0.65 && lina.mp >= 3) {
+          lina.mp -= 3;
+          const heal = Math.min(p.maxHp - p.hp, 18 + p.lv * 4);
+          p.hp += heal; updateStatusUI(); audio.seHeal();
+          await animateLunge(linaFollower, playerActor.group.position);
+          showDamagePopup(playerActor.group.position, `💖+${heal}`, '#f472b6');
+          setBattleLog(`リナの 癒やしの光！\nアルトのHPが ${heal} かいふくした！`);
+          await sleep(780);
+        } else if (lina.mp >= 3 && Math.random() < 0.65) {
+          lina.mp -= 3; updateStatusUI(); audio.seSpell();
+          setBattleLog('リナの援護魔法！ ひかりの矢をはなった！');
+          await animateLunge(linaFollower, enemy.actor.group.position);
+          const dmg = Math.max(4, Math.floor(p.atk * 0.95) + Math.floor(Math.random() * 5));
+          b.enemyHp = Math.max(0, b.enemyHp - dmg);
+          enemy.actor.hitFlash = 1.0; enemy.actor.shakeTimer = 0.3;
+          showDamagePopup(enemy.actor.group.position, `✨-${dmg}`, '#f472b6');
+          updateBattleEnemyUI();
+          setBattleLog(`${enemy.name} に ${dmg} の追加ダメージ！`);
+          await sleep(750);
+          if (await checkBattleVictory()) return;
+        } else {
+          audio.seAttack();
+          setBattleLog('リナのおうえんアタック！');
+          await animateLunge(linaFollower, enemy.actor.group.position);
+          const dmg = Math.max(3, Math.floor(p.atk * 0.65) + Math.floor(Math.random() * 3));
+          b.enemyHp = Math.max(0, b.enemyHp - dmg);
+          enemy.actor.hitFlash = 1.0; enemy.actor.shakeTimer = 0.28;
+          showDamagePopup(enemy.actor.group.position, `-${dmg}`, '#f9a8d4');
+          updateBattleEnemyUI();
+          setBattleLog(`${enemy.name} に ${dmg} のダメージ！`);
+          await sleep(700);
+          if (await checkBattleVictory()) return;
+        }
+      }
+
+      // 3. 敵のターン
+      setBattleLog(`${enemy.name} の こうげき！`);
+      await animateLunge(enemy.actor, playerActor.group.position);
+      audio.seDamage();
+      const rawDmg = enemy.atk + Math.floor(Math.random() * 4) - 1;
+      const eDmg = Math.max(1, rawDmg - STATE.player.def);
+      p.hp = Math.max(0, p.hp - eDmg);
+      playerActor.hitFlash = 1.0; playerActor.shakeTimer = 0.35;
+      showDamagePopup(playerActor.group.position, `-${eDmg}`, '#fb7185');
+      updateStatusUI();
+      setBattleLog(`アルトは ${eDmg} のダメージをうけた！`);
+      await sleep(800);
+
+      if (p.hp <= 0) {
+        setBattleLog('アルトは ちからつきてしまった……\n島の入口まで助けられた！');
+        await sleep(1400);
+        healPartyFull();
+        updateStatusUI();
+        const sp = ISLAND_DEFS[STATE.currentIsland].spawn;
+        playerActor.group.position.set(sp.x, getTerrainHeight(sp.x, sp.z), sp.z);
+        endBattle();
+        return;
+      }
+
+      b.busy = false;
+      setBattleCommandsEnabled(true);
+      setBattleLog('アルトはどうする？');
+    }
+
+    function endBattle() {
+      document.getElementById('battle-ui').classList.add('hidden');
+      document.getElementById('battle-ui').classList.remove('flex');
+      STATE.battle.enemyObj = null;
+      STATE.battle.busy = false;
+      STATE.mode = 'explore';
+      setExploreControlsVisible(true);
+      audio.playBgm(STATE.currentIsland);
+    }
+
+    // =========================================================================
+    // 10. 🎨 キャラ画像変更スタジオ（ローカル画像アップロード専用・localStorage保存）
+    // =========================================================================
+    let selectedStudioChar = 'hero';
+    let selectedStudioCategory = 'party';
+
+    function openStudioModal() {
+      if (STATE.mode === 'battle') return;
+      audio.seSelect();
+      STATE.mode = 'modal';
+      setExploreControlsVisible(false);
+      document.getElementById('studio-modal').classList.remove('hidden');
+      document.getElementById('studio-modal').classList.add('flex');
+      selectedStudioCategory = CHAR_REGISTRY[selectedStudioChar]?.category || 'party';
+      renderStudioCategoryTabs();
+      renderStudioCharButtons();
+      selectStudioChar(selectedStudioChar);
+    }
+
+    function closeStudioModal() {
+      audio.seSelect();
+      document.getElementById('studio-modal').classList.add('hidden');
+      document.getElementById('studio-modal').classList.remove('flex');
+      STATE.mode = 'explore';
+      setExploreControlsVisible(true);
+    }
+
+    function renderStudioCategoryTabs() {
+      const container = document.getElementById('studio-category-tabs');
+      container.innerHTML = '';
+      STUDIO_CATEGORIES.forEach((cat) => {
+        const btn = document.createElement('button');
+        const active = cat.id === selectedStudioCategory;
+        btn.className = `px-2.5 py-1 rounded-full text-xs font-extrabold border transition ${
+          active
+            ? 'bg-sky-400 text-slate-950 border-white shadow'
+            : 'bg-slate-800/80 text-slate-200 border-white/25 hover:bg-slate-700'
+        }`;
+        btn.textContent = cat.label;
+        btn.onclick = () => {
+          audio.seSelect();
+          selectedStudioCategory = cat.id;
+          const firstInCat = Object.values(CHAR_REGISTRY).find((c) => c.category === cat.id);
+          if (firstInCat) selectStudioChar(firstInCat.id);
+          renderStudioCategoryTabs();
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function renderStudioCharButtons() {
+      const container = document.getElementById('studio-char-list');
+      container.innerHTML = '';
+      Object.values(CHAR_REGISTRY)
+        .filter((entry) => entry.category === selectedStudioCategory)
+        .forEach((entry) => {
+          const btn = document.createElement('button');
+          const active = entry.id === selectedStudioChar;
+          btn.className = `px-2 py-1.5 rounded-lg text-[11px] font-bold border transition ${
+            active ? 'bg-amber-400 text-slate-950 border-white shadow' : 'bg-slate-800/90 text-white border-white/25 hover:bg-slate-700'
+          }`;
+          btn.textContent = entry.isCustom ? `★ ${entry.label}` : entry.label;
+          btn.onclick = () => { audio.seSelect(); selectStudioChar(entry.id); };
+          container.appendChild(btn);
+        });
+    }
+
+    function selectStudioChar(charId) {
+      selectedStudioChar = charId;
+      const entry = CHAR_REGISTRY[charId];
+      selectedStudioCategory = entry.category;
+      document.getElementById('studio-selected-name').textContent = entry.fullName;
+      document.getElementById('studio-preview').src = entry.dataUrl;
+      document.getElementById('studio-custom-badge').classList.toggle('hidden', !entry.isCustom);
+      document.getElementById('studio-msg').textContent = '';
+      renderStudioCategoryTabs();
+      renderStudioCharButtons();
+    }
+
+    function applyUploadedImageToCharacter(charId, imgUrl) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const cutoutCanvas = removeWhiteBackgroundAndCutout(img);
+          updateCharTextureFromCanvas(charId, cutoutCanvas, true);
+          const saved = saveCustomSpriteToStorage(charId, cutoutCanvas);
+          document.getElementById('studio-preview').src = CHAR_REGISTRY[charId].dataUrl;
+          document.getElementById('studio-custom-badge').classList.remove('hidden');
+          renderStudioCharButtons();
+          resolve(saved);
+        };
+        img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+        img.src = imgUrl;
+      });
+    }
+
+    // =========================================================================
+    // 11. 入力・イベント設定
+    // =========================================================================
+    const keys = {};
+    const joyVec = { x: 0, y: 0 };
+
+    function getNearestInteractable() {
+      if (!playerActor) return null;
+      const pPos = playerActor.group.position;
+      let best = null, bestDist = Infinity;
+      for (const item of interactables) {
+        const d = Math.hypot(pPos.x - item.pos.x, pPos.z - item.pos.z);
+        if (d < item.radius && d < bestDist) { bestDist = d; best = item; }
+      }
+      return best;
+    }
+
+    function triggerInteract() {
+      if (STATE.mode !== 'explore') return;
+      const target = getNearestInteractable();
+      if (target) {
+        audio.seSelect();
+        target.onInteract();
+      } else {
+        audio.seSelect();
+        startDialog('アルト', ['あたりを しらべてみた。ジオラマの風が心地よい……。']);
+      }
+    }
+
+    function setupInputs() {
+      const unlockOnce = () => { audio.unlock(); };
+      window.addEventListener('pointerdown', unlockOnce, { once: true });
+      window.addEventListener('keydown', unlockOnce, { once: true });
+
+      window.addEventListener('keydown', (e) => {
+        keys[e.code] = true;
+        if (e.code === 'Space' || e.code === 'Enter') {
+          if (STATE.mode === 'dialog') { e.preventDefault(); advanceDialog(); }
+          else if (STATE.mode === 'explore') { e.preventDefault(); triggerInteract(); }
+        }
+      });
+      window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+      // 360度バーチャルジョイスティック
+      const zone = document.getElementById('joystick-zone');
+      const knob = document.getElementById('joystick-knob');
+      let joyActive = false;
+      const maxDist = 38;
+      const updateJoy = (cx, cy) => {
+        const r = zone.getBoundingClientRect();
+        let dx = cx - (r.left + r.width / 2), dy = cy - (r.top + r.height / 2);
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxDist) { dx = (dx / dist) * maxDist; dy = (dy / dist) * maxDist; }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+        joyVec.x = dx / maxDist; joyVec.y = dy / maxDist;
+      };
+      const resetJoy = () => {
+        joyActive = false; knob.style.transform = 'translate(0px, 0px)';
+        joyVec.x = 0; joyVec.y = 0;
+      };
+      zone.addEventListener('pointerdown', (e) => { joyActive = true; zone.setPointerCapture(e.pointerId); updateJoy(e.clientX, e.clientY); });
+      zone.addEventListener('pointermove', (e) => { if (joyActive) updateJoy(e.clientX, e.clientY); });
+      zone.addEventListener('pointerup', resetJoy);
+      zone.addEventListener('pointercancel', resetJoy);
+
+      // カメラ回転ドラッグ
+      const canvas = document.getElementById('game-canvas');
+      let dragging = false, lastDragX = 0;
+      canvas.addEventListener('pointerdown', (e) => { if (STATE.mode !== 'explore') return; dragging = true; lastDragX = e.clientX; });
+      window.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        targetCameraAngle -= (e.clientX - lastDragX) * 0.006;
+        lastDragX = e.clientX;
+      });
+      window.addEventListener('pointerup', () => { dragging = false; });
+
+      // ボタンイベント
+      document.getElementById('btn-action').addEventListener('click', triggerInteract);
+      document.getElementById('dialog-box').addEventListener('click', advanceDialog);
+      document.getElementById('btn-time').addEventListener('click', () => {
+        audio.seSelect();
+        const next = lightingMode === 'day' ? 'evening' : lightingMode === 'evening' ? 'night' : 'day';
+        applyLighting(next);
+      });
+      document.getElementById('btn-cam-left').addEventListener('click', () => { audio.seSelect(); targetCameraAngle += Math.PI / 6; });
+      document.getElementById('btn-cam-right').addEventListener('click', () => { audio.seSelect(); targetCameraAngle -= Math.PI / 6; });
+      document.getElementById('btn-sound').addEventListener('click', () => {
+        const muted = audio.toggleMute();
+        document.getElementById('btn-sound').textContent = muted ? '🔇 消音' : '🔊 BGM/SE';
+      });
+      document.getElementById('btn-warp-close').addEventListener('click', () => { audio.seSelect(); closeWarpModal(); });
+
+      // バトルコマンド
+      document.querySelectorAll('#battle-commands button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const cmd = btn.dataset.cmd;
+          if (cmd === 'spell') {
+            audio.seSelect();
+            document.getElementById('battle-commands').classList.add('hidden');
+            document.getElementById('battle-spells').classList.remove('hidden');
+            document.getElementById('battle-spells').classList.add('flex');
+          } else {
+            handleBattleAction(cmd);
+          }
+        });
+      });
+      document.querySelectorAll('#battle-spells button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sp = btn.dataset.spell;
+          if (sp === 'back') {
+            audio.seSelect();
+            document.getElementById('battle-spells').classList.add('hidden');
+            document.getElementById('battle-spells').classList.remove('flex');
+            document.getElementById('battle-commands').classList.remove('hidden');
+          } else {
+            handleBattleAction('spell', sp);
+          }
+        });
+      });
+
+      // スタジオモーダル（アップロード＆デフォルト復元）
+      document.getElementById('btn-studio').addEventListener('click', openStudioModal);
+      document.getElementById('btn-studio-close').addEventListener('click', closeStudioModal);
+      document.getElementById('btn-reset-sprite').addEventListener('click', () => {
+        audio.seSelect();
+        const entry = CHAR_REGISTRY[selectedStudioChar];
+        removeCustomSpriteFromStorage(selectedStudioChar);
+        updateCharTextureFromCanvas(selectedStudioChar, entry.drawDefault(), false);
+        document.getElementById('studio-preview').src = entry.dataUrl;
+        document.getElementById('studio-custom-badge').classList.add('hidden');
+        renderStudioCharButtons();
+        document.getElementById('studio-msg').textContent = '↺ デフォルトのイラストに戻しました！';
+      });
+      document.getElementById('file-upload').addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
+            const saved = await applyUploadedImageToCharacter(selectedStudioChar, ev.target.result);
+            audio.seHeal();
+            document.getElementById('studio-msg').textContent = saved
+              ? '📁 画像を板に貼り付けて保存しました！'
+              : '📁 画像を板に貼り付けました！（※ブラウザの保存容量上限のため一時反映）';
+          } catch {
+            document.getElementById('studio-msg').textContent = '画像の読み込みに失敗しました。';
+          }
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      document.getElementById('btn-clear-close').addEventListener('click', () => {
+        audio.seSelect();
+        document.getElementById('clear-modal').classList.add('hidden');
+        document.getElementById('clear-modal').classList.remove('flex');
+        STATE.mode = 'explore';
+        setExploreControlsVisible(true);
+      });
+    }
+
+    // =========================================================================
+    // 12. 初期化＆メインアニメーションループ
+    // =========================================================================
+    let clock;
+
+    function initGame() {
+      initDefaultTextures();
+
+      const canvas = document.getElementById('game-canvas');
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.5, 130);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.82;
+
+      hemiLight = new THREE.HemisphereLight(0xdcf5ff, 0x6b8c52, 0.72);
+      scene.add(hemiLight);
+      ambientLight = new THREE.AmbientLight(0xfff1dc, 0.25);
+      scene.add(ambientLight);
+      sunLight = new THREE.DirectionalLight(0xfff5d6, 1.25);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 5;
+      sunLight.shadow.camera.far = 75;
+      const d = 24;
+      sunLight.shadow.camera.left = -d; sunLight.shadow.camera.right = d;
+      sunLight.shadow.camera.top = d; sunLight.shadow.camera.bottom = -d;
+      sunLight.shadow.bias = -0.0005;
+      scene.add(sunLight);
+
+      playerActor = new PaperCharacter({
+        charId: 'hero', x: 0, z: 7.5, width: 1.9, height: 2.1, name: 'アルト', type: 'player', parent: scene
+      });
+
+      exclaimSprite = createExclaimSprite();
+      buildIslandWorld('green');
+      updateStatusUI();
+      setupInputs();
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      clock = new THREE.Clock();
+      animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const elapsed = clock.elapsedTime;
+
+      if (tabletCrystal) {
+        tabletCrystal.rotation.y = elapsed * 0.9;
+        const tp = ISLAND_DEFS[STATE.currentIsland].tabletPos;
+        tabletCrystal.position.y = getTerrainHeight(tp.x, tp.z) + 1.95 + Math.sin(elapsed * 2.2) * 0.16;
+      }
+      if (cloudGroup) cloudGroup.rotation.y = elapsed * 0.025;
+      if (waterMesh) waterMesh.position.y = -1.05 + Math.sin(elapsed * 1.6) * 0.06;
+
+      if (snowPoints) {
+        const arr = snowPoints.geometry.attributes.position.array;
+        for (let i = 0; i < arr.length; i += 3) {
+          arr[i + 1] -= dt * 2.2;
+          arr[i] += Math.sin(elapsed + i) * dt * 0.35;
+          if (arr[i + 1] < -0.5) arr[i + 1] = 17.5;
+        }
+        snowPoints.geometry.attributes.position.needsUpdate = true;
+      }
+
+      if (warpParticles) {
+        const arr = warpParticles.geometry.attributes.position.array;
+        for (let i = 0; i < arr.length; i += 3) arr[i + 1] += dt * 4.5;
+        warpParticles.geometry.attributes.position.needsUpdate = true;
+        warpParticles.userData.life -= dt;
+        warpParticles.material.opacity = Math.max(0, warpParticles.userData.life);
+        if (warpParticles.userData.life <= 0) {
+          scene.remove(warpParticles);
+          warpParticles = null;
+        }
+      }
+
+      campfireFlames.forEach((f) => {
+        const flicker = 0.88 + Math.sin(elapsed * 14) * 0.14 + Math.cos(elapsed * 23) * 0.08;
+        f.outer.scale.set(1, flicker, 1);
+        f.inner.scale.set(1, flicker * 1.05, 1);
+        f.light.intensity = 1.7 + Math.sin(elapsed * 16) * 0.45;
+      });
+
+      npcBehaviors.forEach((nb) => {
+        if (nb.badgeSprite) {
+          nb.badgeSprite.position.y = 2.48 + Math.sin(elapsed * 3.5 + nb.phase) * 0.1;
+        }
+        if (STATE.mode !== 'explore') {
+          nb.actor.isMoving = false;
+          return;
+        }
+        if (nb.mode === 'sway') {
+          nb.actor.mesh.rotation.z = Math.sin(elapsed * 3.2 + nb.phase) * 0.12;
+          nb.actor.isMoving = false;
+        } else if (nb.mode === 'wander') {
+          nb.timer -= dt;
+          if (nb.timer <= 0) {
+            nb.timer = 1.6 + Math.random() * 2.2;
+            nb.angle = Math.random() * Math.PI * 2;
+          }
+          const nx = nb.actor.group.position.x + Math.cos(nb.angle) * 1.2 * dt;
+          const nz = nb.actor.group.position.z + Math.sin(nb.angle) * 1.2 * dt;
+          if (Math.hypot(nx - nb.homeX, nz - nb.homeZ) < nb.radius && canWalkTo(nx, nz)) {
+            nb.actor.group.position.set(nx, getTerrainHeight(nx, nz), nz);
+            nb.actor.facing = Math.cos(nb.angle - cameraAngle) >= 0 ? 1 : -1;
+            nb.actor.isMoving = true;
+          } else {
+            nb.angle += Math.PI * 0.75;
+            nb.actor.isMoving = false;
+          }
+        }
+      });
+
+      if (STATE.mode === 'explore') {
+        let inputX = joyVec.x, inputZ = joyVec.y;
+        if (keys['KeyW'] || keys['ArrowUp']) inputZ -= 1;
+        if (keys['KeyS'] || keys['ArrowDown']) inputZ += 1;
+        if (keys['KeyA'] || keys['ArrowLeft']) inputX -= 1;
+        if (keys['KeyD'] || keys['ArrowRight']) inputX += 1;
+
+        const len = Math.hypot(inputX, inputZ);
+        if (len > 0.12) {
+          inputX /= Math.max(1, len); inputZ /= Math.max(1, len);
+          const cosA = Math.cos(cameraAngle), sinA = Math.sin(cameraAngle);
+          const moveX = inputX * cosA + inputZ * sinA;
+          const moveZ = -inputX * sinA + inputZ * cosA;
+          const speed = 6.3;
+          const pPos = playerActor.group.position;
+          const nx = pPos.x + moveX * speed * dt, nz = pPos.z + moveZ * speed * dt;
+
+          if (canWalkTo(nx, nz)) { pPos.x = nx; pPos.z = nz; }
+          else if (canWalkTo(nx, pPos.z)) { pPos.x = nx; }
+          else if (canWalkTo(pPos.x, nz)) { pPos.z = nz; }
+          pPos.y = getTerrainHeight(pPos.x, pPos.z);
+
+          if (Math.abs(inputX) > 0.15) playerActor.facing = inputX > 0 ? 1 : -1;
+          playerActor.isMoving = true;
+
+          stepSoundCooldown -= dt;
+          if (stepSoundCooldown <= 0) {
+            audio.seStep();
+            stepSoundCooldown = 0.27;
+          }
+
+          const last = playerTrail[0];
+          if (!last || Math.hypot(pPos.x - last.x, pPos.z - last.z) > 0.2) {
+            playerTrail.unshift({ x: pPos.x, z: pPos.z });
+            if (playerTrail.length > 35) playerTrail.pop();
+          }
+        } else {
+          playerActor.isMoving = false;
+        }
+
+        if (STATE.lina.joined && linaFollower) {
+          const targetPt = playerTrail[Math.min(playerTrail.length - 1, 9)] || {
+            x: playerActor.group.position.x - 1.2,
+            z: playerActor.group.position.z + 1.2
+          };
+          const lPos = linaFollower.group.position;
+          const dx = targetPt.x - lPos.x, dz = targetPt.z - lPos.z;
+          const d = Math.hypot(dx, dz);
+          if (d > 0.18) {
+            const step = Math.min(d, 5.9 * dt);
+            lPos.x += (dx / d) * step;
+            lPos.z += (dz / d) * step;
+            lPos.y = getTerrainHeight(lPos.x, lPos.z);
+            const screenRight = dx * Math.cos(cameraAngle) - dz * Math.sin(cameraAngle);
+            if (Math.abs(screenRight) > 0.05) linaFollower.facing = screenRight > 0 ? 1 : -1;
+            linaFollower.isMoving = true;
+          } else {
+            linaFollower.isMoving = false;
+          }
+        }
+
+        const near = getNearestInteractable();
+        if (near) {
+          exclaimSprite.visible = true;
+          const baseY = near.type === 'tablet' ? near.pos.y + 1.85 : near.pos.y + 2.65;
+          exclaimSprite.position.set(near.pos.x, baseY + Math.sin(elapsed * 6) * 0.12, near.pos.z);
+          document.getElementById('btn-action-label').textContent = near.type === 'npc' ? 'はなす' : 'しらべる';
+        } else {
+          exclaimSprite.visible = false;
+          document.getElementById('btn-action-label').textContent = 'しらべる';
+        }
+      } else {
+        playerActor.isMoving = false;
+        if (linaFollower) linaFollower.isMoving = false;
+        exclaimSprite.visible = false;
+      }
+
+      for (const m of monsterActors) {
+        if (!m.alive) {
+          m.respawnTimer -= dt;
+          if (m.respawnTimer <= 0) {
+            m.alive = true;
+            m.actor.group.position.set(m.homeX, getTerrainHeight(m.homeX, m.homeZ), m.homeZ);
+            m.actor.group.visible = true;
+          }
+          continue;
+        }
+        if (STATE.mode === 'explore') {
+          if (!m.isBoss) {
+            m.wanderTimer -= dt;
+            if (m.wanderTimer <= 0) {
+              m.wanderTimer = 1.6 + Math.random() * 2.2;
+              m.wanderAngle = Math.random() * Math.PI * 2;
+            }
+            const mx = m.actor.group.position.x + Math.cos(m.wanderAngle) * 1.45 * dt;
+            const mz = m.actor.group.position.z + Math.sin(m.wanderAngle) * 1.45 * dt;
+            if (Math.hypot(mx - m.homeX, mz - m.homeZ) < 4.2 && canWalkTo(mx, mz)) {
+              m.actor.group.position.set(mx, getTerrainHeight(mx, mz), mz);
+              m.actor.facing = Math.cos(m.wanderAngle - cameraAngle) >= 0 ? 1 : -1;
+              m.actor.isMoving = true;
+            } else {
+              m.wanderAngle += Math.PI * 0.7;
+              m.actor.isMoving = false;
+            }
+          }
+          const dPlayer = Math.hypot(
+            playerActor.group.position.x - m.actor.group.position.x,
+            playerActor.group.position.z - m.actor.group.position.z
+          );
+          if (dPlayer < (m.isBoss ? 2.15 : 1.55)) startBattle(m);
+        } else {
+          m.actor.isMoving = false;
+        }
+      }
+
+      cameraAngle += (targetCameraAngle - cameraAngle) * Math.min(1, dt * 8);
+      let desiredLookAt = playerActor.group.position.clone();
+      desiredLookAt.y += 1.0;
+      let camDist = 17.5, camHeight = 13.5;
+
+      if (STATE.mode === 'battle' && STATE.battle.enemyObj) {
+        desiredLookAt.lerp(STATE.battle.enemyObj.actor.group.position, 0.5);
+        desiredLookAt.y += 0.5;
+        camDist = 11.4; camHeight = 6.2;
+      }
+
+      cameraLookAtCurrent.lerp(desiredLookAt, Math.min(1, dt * 6));
+      const camX = cameraLookAtCurrent.x + Math.sin(cameraAngle) * camDist;
+      const camZ = cameraLookAtCurrent.z + Math.cos(cameraAngle) * camDist;
+      const camY = cameraLookAtCurrent.y + camHeight;
+      camera.position.lerp(new THREE.Vector3(camX, camY, camZ), Math.min(1, dt * 6));
+      camera.lookAt(cameraLookAtCurrent);
+
+      playerActor.update(dt, camera.position);
+      if (linaFollower && linaFollower.group.visible) linaFollower.update(dt, camera.position);
+      npcActors.forEach((npc) => npc.update(dt, camera.position));
+      monsterActors.forEach((m) => { if (m.alive) m.actor.update(dt, camera.position); });
+
+      renderer.render(scene, camera);
+    }
+
+    window.onload = function () {
+      initGame();
+    };
+  </script>
+</body>
+</html>

@@ -1,3 +1,3 @@
-:HL["/mori-lab-games/_next/static/css/1f06958d318aeba5.css","style"]
+:HL["/mori-lab-games/_next/static/css/6d06c8b7639f16ff.css","style"]
 :HL["/mori-lab-games/_next/static/css/170f6c02233b6092.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"t9JcEMFh8lzTcC3ELycI6"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"onWqpg22JJE8u60E1_f3Y"}

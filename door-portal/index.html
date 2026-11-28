@@ -112,18 +112,16 @@
     .lock-banner.locked { color: #fbbf24; }
 
     #world-buttons {
-      display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px;
-      scrollbar-width: none;
+      display: flex; flex-wrap: wrap; gap: 5px;
     }
-    #world-buttons::-webkit-scrollbar { display: none; }
     .world-btn {
-      flex: 0 0 auto;
+      max-width: 100%; min-height: 32px;
       background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 10px;
       padding: 6px 10px;
       color: #e2e8f0; font-size: 11.5px; font-weight: 600;
-      cursor: pointer; white-space: nowrap;
+      cursor: pointer; overflow-wrap: anywhere;
       transition: all 0.18s;
     }
     .world-btn.active {
@@ -255,7 +253,7 @@
 
   <div id="bottom-panel">
     <div class="lock-banner" id="lock-banner">🔓 元の部屋でドアが閉じています：行き先を変更できます</div>
-    <div id="world-buttons"></div>
+    <div id="world-buttons" role="group" aria-label="行き先"></div>
     <div class="time-presets">
       <button class="time-btn" data-hour="6.25">🌅 朝焼け</button>
       <button class="time-btn active" data-hour="10.5">☀️ 真昼</button>

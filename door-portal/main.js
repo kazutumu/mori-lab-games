@@ -102,12 +102,24 @@ const elSpotName = document.getElementById('spot-name');
 const elSpotText = document.getElementById('spot-text');
 const elLockBanner = document.getElementById('lock-banner');
 const elWorldButtons = document.getElementById('world-buttons');
+const elWorldSelect = document.getElementById('world-select');
+if (elWorldSelect) {
+  for (const world of WORLDS) {
+    elWorldSelect.add(new Option(world.name, world.id));
+  }
+  elWorldSelect.addEventListener('change', () => selectWorld(getWorldById(elWorldSelect.value)));
+}
 const elSlider = document.getElementById('time-slider');
 const btnDoor = document.getElementById('btn-door');
 const btnTravel = document.getElementById('btn-travel');
 const btnAudio = document.getElementById('btn-audio');
 const btnReset = document.getElementById('btn-reset');
 const btnViewMode = document.getElementById('btn-viewmode');
+const btnMobileInfo = document.getElementById('btn-mobile-info');
+btnMobileInfo?.addEventListener('click', () => {
+  const opened = document.body.classList.toggle('mobile-info-visible');
+  btnMobileInfo.setAttribute('aria-expanded', String(opened));
+});
 const elToast = document.getElementById('toast');
 
 let toastTimer = null;
@@ -122,6 +134,18 @@ function canChangeDestination() {
   return state.location === 'gallery' && !state.doorTargetOpen && state.doorOpenRatio < 0.02;
 }
 
+function selectWorld(world) {
+  if (!canChangeDestination()) {
+    if (elWorldSelect) elWorldSelect.value = state.selectedWorldId;
+    showToast('元の部屋に戻ってドアを閉じると行き先を変更できます');
+    return;
+  }
+  state.selectedWorldId = world.id;
+  activeWorld = ensureWorldBuilt(world);
+  activeWorld.sky.update(state.hour);
+  syncUI();
+}
+
 function renderWorldButtons() {
   elWorldButtons.innerHTML = '';
   const unlocked = canChangeDestination();
@@ -129,16 +153,7 @@ function renderWorldButtons() {
     const btn = document.createElement('button');
     btn.className = 'world-btn' + (w.id === state.selectedWorldId ? ' active' : '') + (!unlocked ? ' locked' : '');
     btn.textContent = (!unlocked && w.id !== state.selectedWorldId ? '🔒 ' : '') + w.name;
-    btn.addEventListener('click', () => {
-      if (!canChangeDestination()) {
-        showToast('元の部屋に戻ってドアを閉じると行き先を変更できます');
-        return;
-      }
-      state.selectedWorldId = w.id;
-      activeWorld = ensureWorldBuilt(w);
-      activeWorld.sky.update(state.hour);
-      syncUI();
-    });
+    btn.addEventListener('click', () => selectWorld(w));
     elWorldButtons.appendChild(btn);
   }
 }
@@ -169,6 +184,10 @@ function syncUI() {
 
   elTimePill.textContent = formatHourLabel(state.hour);
   renderWorldButtons();
+  if (elWorldSelect) {
+    elWorldSelect.value = state.selectedWorldId;
+    elWorldSelect.disabled = !unlocked;
+  }
   audio.setEnvironment(inWorld ? activeWorld.def.audioType : 'gallery', state.hour);
 }
 
@@ -272,7 +291,6 @@ window.addEventListener('pointercancel', (e) => {
 const joyBase = document.getElementById('joystick-base');
 const joyKnob = document.getElementById('joystick-knob');
 let joyPointerId = null;
-const JOY_MAX = 32;
 
 function updateJoystick(clientX, clientY) {
   const rect = joyBase.getBoundingClientRect();
@@ -280,14 +298,15 @@ function updateJoystick(clientX, clientY) {
   const cy = rect.top + rect.height / 2;
   let dx = clientX - cx;
   let dy = clientY - cy;
+  const maxTravel = Math.min(32, rect.width * 0.35);
   const dist = Math.hypot(dx, dy);
-  if (dist > JOY_MAX) {
-    dx = (dx / dist) * JOY_MAX;
-    dy = (dy / dist) * JOY_MAX;
+  if (dist > maxTravel) {
+    dx = (dx / dist) * maxTravel;
+    dy = (dy / dist) * maxTravel;
   }
   joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-  state.joyX = dx / JOY_MAX;
-  state.joyY = -dy / JOY_MAX;
+  state.joyX = dx / maxTravel;
+  state.joyY = -dy / maxTravel;
 }
 
 joyBase.addEventListener('pointerdown', (e) => {
@@ -313,7 +332,10 @@ joyBase.addEventListener('pointerup', releaseJoystick);
 joyBase.addEventListener('pointercancel', releaseJoystick);
 
 // Keyboard controls
-window.addEventListener('keydown', (e) => state.keys.add(e.code));
+window.addEventListener('keydown', (e) => {
+  if (e.target === elWorldSelect) return;
+  state.keys.add(e.code);
+});
 window.addEventListener('keyup', (e) => state.keys.delete(e.code));
 
 window.addEventListener('resize', () => {

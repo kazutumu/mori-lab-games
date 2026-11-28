@@ -99,13 +99,6 @@
       z-index: 20;
       transition: opacity 0.25s, transform 0.25s;
     }
-    @media (max-width: 640px) {
-      #bottom-panel {
-        left: auto; right: 10px; transform: none; margin-left: 0;
-        width: calc(100vw - 128px);
-        padding: 9px 10px; gap: 7px;
-      }
-    }
     .lock-banner {
       font-size: 11px; color: #cbd5e1; display: flex; align-items: center; gap: 5px;
     }
@@ -155,7 +148,7 @@
       font-size: 10.5px; color: #94a3b8;
     }
     #time-slider {
-      flex: 1; accent-color: #38bdf8; cursor: pointer; height: 6px;
+      flex: 1; min-width: 0; accent-color: #38bdf8; cursor: pointer; height: 6px;
     }
 
     .action-row {
@@ -199,6 +192,43 @@
       text-shadow: 0 1px 4px rgba(0,0,0,0.8);
     }
 
+    .mobile-destination, #btn-mobile-info { display: none; }
+    @media (max-width: 640px), (max-width: 950px) and (max-height: 500px) {
+      #bottom-panel {
+        left: auto; right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
+        transform: none; margin-left: 0;
+        width: min(345px, calc(100% - 92px));
+        padding: 8px; gap: 6px; transition-property: opacity;
+      }
+      #joystick-zone {
+        left: 8px; bottom: max(12px, env(safe-area-inset-bottom));
+        width: 74px; height: 84px;
+      }
+      #joystick-base { width: 74px; height: 74px; }
+      #joystick-knob { width: 32px; height: 32px; }
+      #top-bar .pill { padding: 5px 8px; font-size: 11px; white-space: nowrap; }
+      #top-bar .pill-row:last-child { flex: none; flex-direction: column; align-items: flex-end; }
+      #btn-mobile-info { display: inline-flex; }
+      #info-stack { top: 108px; width: min(225px, calc(100% - 24px)); }
+      body:not(.mobile-info-visible) #info-stack { display: none; }
+      #world-buttons { display: none; }
+      .mobile-destination {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 11px; font-weight: 700; white-space: nowrap;
+      }
+      #world-select {
+        flex: 1; min-width: 0; min-height: 44px;
+        border: 1px solid #7dd3fc; border-radius: 8px;
+        padding: 4px 6px; background: #263444; color: #f3f5f8;
+        font-family: inherit; font-size: 16px; font-weight: 600;
+        color-scheme: dark; touch-action: manipulation;
+      }
+      #world-select:disabled { opacity: 0.65; }
+      .lock-banner { font-size: 10px; }
+      .time-presets { gap: 3px; }
+      .time-btn { padding-inline: 2px; font-size: 10px; }
+      .action-btn { min-height: 40px; padding: 4px; font-size: 11px; }
+    }
     /* Appreciation (hide UI) mode */
     body.ui-hidden #info-stack,
     body.ui-hidden #bottom-panel,
@@ -230,6 +260,7 @@
     </div>
     <div class="pill-row">
       <button class="pill pill-btn" id="btn-viewmode">👁 鑑賞モード</button>
+      <button class="pill pill-btn" id="btn-mobile-info" aria-controls="info-stack" aria-expanded="false">案内</button>
     </div>
   </div>
 
@@ -254,6 +285,9 @@
   <div id="bottom-panel">
     <div class="lock-banner" id="lock-banner">🔓 元の部屋でドアが閉じています：行き先を変更できます</div>
     <div id="world-buttons" role="group" aria-label="行き先"></div>
+    <label class="mobile-destination" for="world-select">行き先
+      <select id="world-select" aria-describedby="lock-banner"></select>
+    </label>
     <div class="time-presets">
       <button class="time-btn" data-hour="6.25">🌅 朝焼け</button>
       <button class="time-btn active" data-hour="10.5">☀️ 真昼</button>
@@ -273,6 +307,6 @@
 
   <div id="toast"></div>
 
-  <script type="module" src="./main.js"></script>
+  <script type="module" src="./main.js?v=mobile-layout"></script>
 </body>
 </html>

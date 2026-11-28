@@ -3,6 +3,7 @@ import { stonehengeWorld } from './stonehenge.js';
 import { pyramidsWorld } from './pyramids.js';
 import { angkorWatWorld } from './angkorWat.js';
 import { moonWorld } from './moon.js';
+import { tokyoTowerWorld } from './tokyoTower.js';
 
 // Add any new world plugin here in 1 line!
 export const WORLDS = [
@@ -10,7 +11,8 @@ export const WORLDS = [
   stonehengeWorld,
   pyramidsWorld,
   angkorWatWorld,
-  moonWorld
+  moonWorld,
+  tokyoTowerWorld
 ];
 
 export function getWorldById(id) {

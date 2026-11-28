@@ -3,7 +3,7 @@ import { createSharedTextures } from './core/textures.js';
 import { createDoorAssembly, createGalleryScene, createPortalMaskMesh } from './core/door.js';
 import { createSkySystem, formatHourLabel } from './core/sky.js';
 import { AmbientAudio } from './core/audio.js';
-import { WORLDS, getWorldById } from './worlds/index.js';
+import { WORLDS, getWorldById } from './worlds/index.js?v=tokyo-tower';
 
 // -----------------------------------------------------------------------------
 // Renderer & Camera
@@ -84,7 +84,7 @@ const state = {
 };
 
 let activeWorld = ensureWorldBuilt(getWorldById(state.selectedWorldId));
-activeWorld.sky.update(state.hour);
+activeWorld.sky.update(worldHour());
 
 // -----------------------------------------------------------------------------
 // UI Wiring
@@ -109,6 +109,8 @@ if (elWorldSelect) {
   }
   elWorldSelect.addEventListener('change', () => selectWorld(getWorldById(elWorldSelect.value)));
 }
+const bottomPanel = document.getElementById('bottom-panel');
+const timeButtons = document.querySelectorAll('.time-btn');
 const elSlider = document.getElementById('time-slider');
 const btnDoor = document.getElementById('btn-door');
 const btnTravel = document.getElementById('btn-travel');
@@ -142,7 +144,7 @@ function selectWorld(world) {
   }
   state.selectedWorldId = world.id;
   activeWorld = ensureWorldBuilt(world);
-  activeWorld.sky.update(state.hour);
+  activeWorld.sky.update(worldHour());
   syncUI();
 }
 
@@ -182,13 +184,13 @@ function syncUI() {
     ? '🔓 元の部屋でドアが閉じています：行き先を変更できます'
     : '🔒 行き先を変更するには、元の部屋に戻ってドアを閉めてください';
 
-  elTimePill.textContent = formatHourLabel(state.hour);
+  syncTimeControls();
   renderWorldButtons();
   if (elWorldSelect) {
     elWorldSelect.value = state.selectedWorldId;
     elWorldSelect.disabled = !unlocked;
   }
-  audio.setEnvironment(inWorld ? activeWorld.def.audioType : 'gallery', state.hour);
+  audio.setEnvironment(inWorld ? activeWorld.def.audioType : 'gallery', worldHour());
 }
 
 btnDoor.addEventListener('click', () => {
@@ -215,7 +217,7 @@ btnTravel.addEventListener('click', () => {
 btnAudio.addEventListener('click', () => {
   const on = audio.toggle();
   btnAudio.textContent = on ? '🔊 音ON' : '🔇 音OFF';
-  audio.setEnvironment(state.location === 'world' ? activeWorld.def.audioType : 'gallery', state.hour);
+  audio.setEnvironment(state.location === 'world' ? activeWorld.def.audioType : 'gallery', worldHour());
 });
 
 btnReset.addEventListener('click', () => {
@@ -233,26 +235,29 @@ btnViewMode.addEventListener('click', () => {
   btnViewMode.textContent = document.body.classList.contains('ui-hidden') ? '↩ UIを表示' : '👁 鑑賞モード';
 });
 
-function setHour(h) {
-  state.hour = h;
-  elSlider.value = String(h);
-  activeWorld.sky.update(state.hour);
-  elTimePill.textContent = formatHourLabel(state.hour);
-  audio.setEnvironment(state.location === 'world' ? activeWorld.def.audioType : 'gallery', state.hour);
+function worldHour() {
+  return activeWorld.def.fixedHour ?? state.hour;
 }
 
-elSlider.addEventListener('input', (e) => {
-  document.querySelectorAll('.time-btn').forEach((b) => b.classList.remove('active'));
-  setHour(parseFloat(e.target.value));
-});
+function syncTimeControls() {
+  const isFixed = activeWorld.def.fixedHour !== undefined;
+  const hour = worldHour();
+  bottomPanel.toggleAttribute('data-fixed-hour', isFixed);
+  elSlider.value = String(hour);
+  elTimePill.textContent = isFixed ? '🌃 東京の夜景' : formatHourLabel(hour);
+  timeButtons.forEach((button) => button.classList.toggle('active', Number(button.dataset.hour) === hour));
+}
 
-document.querySelectorAll('.time-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.time-btn').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    setHour(parseFloat(btn.dataset.hour));
-  });
-});
+function setHour(hour) {
+  if (activeWorld.def.fixedHour !== undefined) return;
+  state.hour = hour;
+  activeWorld.sky.update(worldHour());
+  syncTimeControls();
+  audio.setEnvironment(state.location === 'world' ? activeWorld.def.audioType : 'gallery', worldHour());
+}
+
+elSlider.addEventListener('input', (event) => setHour(Number(event.target.value)));
+timeButtons.forEach((button) => button.addEventListener('click', () => setHour(Number(button.dataset.hour))));
 
 // -----------------------------------------------------------------------------
 // Look Controls (Multi-touch safe pointer drag, up to +85 deg zenith)
@@ -484,7 +489,7 @@ function animate() {
   }
 
   updateMovement(dt);
-  activeWorld.instance.update(dt, elapsed, state.hour);
+  activeWorld.instance.update(dt, elapsed, worldHour());
   audio.update(dt);
   renderPortal();
 }

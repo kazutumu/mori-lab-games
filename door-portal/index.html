@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>どこでもじゃないドア（笑） — 5ワールド</title>
+  <title>どこでもじゃないドア（笑） — 6ワールド</title>
   <script type="importmap">
     {
       "imports": {
@@ -137,6 +137,9 @@
       cursor: pointer; transition: background 0.15s;
     }
     .time-btn:hover { background: rgba(255, 255, 255, 0.16); }
+    #bottom-panel[data-fixed-hour] .time-presets,
+    #bottom-panel[data-fixed-hour] .slider-row { display: none; }
+
     .time-btn.active {
       background: rgba(251, 191, 36, 0.25);
       border-color: rgba(251, 191, 36, 0.7);
@@ -307,6 +310,6 @@
 
   <div id="toast"></div>
 
-  <script type="module" src="./main.js?v=mobile-layout"></script>
+  <script type="module" src="./main.js?v=tokyo-tower"></script>
 </body>
 </html>

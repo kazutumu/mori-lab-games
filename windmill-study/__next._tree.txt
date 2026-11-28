@@ -1,3 +1,3 @@
-:HL["/mori-lab-games/_next/static/css/e929455682e8beee.css","style"]
+:HL["/mori-lab-games/_next/static/css/1f06958d318aeba5.css","style"]
 :HL["/mori-lab-games/_next/static/css/6d9c0b5a23014522.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"windmill-study","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"Y53sV2tgEa_aGtjyKOfCP"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"windmill-study","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"nhjHbC1BNJ_Sl72cop9P6"}
